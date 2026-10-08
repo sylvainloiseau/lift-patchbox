@@ -24,9 +24,17 @@
     <junit.version>6.1.0</junit.version>
   </properties>
 
+  <repositories>
+    <repository>
+      <id>github</id>
+      <name>GitHub Packages</name>
+      <url>https://maven.pkg.github.com/sylvainloiseau/*</url>
+    </repository>
+  </repositories>
+
   <dependencies>
     <dependency>
-      <groupId>fr.cnrs.lacito</groupId>
+      <groupId>io.github.sylvainloiseau</groupId>
       <artifactId>lift-api</artifactId>
       <version>0.1-SNAPSHOT</version>
     </dependency>
