@@ -611,5 +611,46 @@
     "description": "re-keying a typed component onto a type a sibling already has is a duplicate",
     "dictionary": "standard",
     "script": "create translation(type = \"literal\", text@en = \"precisely\")\n  under example[text@tww = \"a mami jefi\"]\n  of sense[gloss@en = \"pig\"]\n  of entry[form@tww = \"mami\", hn = 1]\nset type = \"literal\"\n  on translation^free\n  of example[text@tww = \"a mami jefi\"]\n  of sense[gloss@en = \"pig\"]\n  of entry[form@tww = \"mami\", hn = 1]",
-    "expect": { "status": "error", "code": "CANNOT_CREATE_DUPLICATE", "kind": "dynamic", "commandIndex": 2 } }
+    "expect": { "status": "error", "code": "CANNOT_CREATE_DUPLICATE", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-088", "section": "4.5", "syntax": "LiftPatchRef",
+    "description": "the type of a field is read-only, like the type of a trait, and is refused before the dictionary is consulted",
+    "dictionary": "standard",
+    "script": "set type = \"review\" on field^editorial of entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "PROPERTY_IS_READ_ONLY", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-089", "section": "4.1", "syntax": "LiftPatchRef",
+    "description": "a variant has a form and no type; its kind is a variant-type trait",
+    "dictionary": "standard",
+    "script": "create variant(form@tww = \"mamii\")\n  under entry[form@tww = \"mami\", hn = 1] {\n  create trait(type = \"variant-type\", value = \"Dialectal Variant\")\n}",
+    "expect": { "status": "ok", "effects": [
+      { "kind": "componentCreated", "componentType": "variant", "position": 1 },
+      { "kind": "propertySet", "property": "form", "language": "tww", "oldValue": null, "newValue": "mamii" },
+      { "kind": "componentCreated", "componentType": "trait", "position": null },
+      { "kind": "propertySet", "property": "type", "language": null, "oldValue": null, "newValue": "variant-type" },
+      { "kind": "propertySet", "property": "value", "language": null, "oldValue": null, "newValue": "Dialectal Variant" } ] } },
+
+  { "id": "C-090", "section": "4.1", "syntax": "LiftPatchRef",
+    "description": "a variant has no type property",
+    "dictionary": "standard",
+    "script": "create variant(type = \"dialectal\", form@tww = \"mamii\")\n  under entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-091", "section": "5.2", "syntax": "LiftPatchRef",
+    "description": "the natural identity of a variant is its form: two variants with the same qualified form under one entry are duplicates",
+    "dictionary": "standard",
+    "script": "create variant(form@tww = \"mamii\") under entry[form@tww = \"mami\", hn = 1]\ncreate variant(form@tww = \"mamii\") under entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "CANNOT_CREATE_DUPLICATE", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-092", "section": "4.1", "syntax": "LiftPatchRef",
+    "description": "a variant has no target property; a link from a variant is a relation",
+    "dictionary": "standard",
+    "script": "create variant(target = entry[form@tww = \"memi\"])\n  under entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-093", "section": "6.1", "syntax": "LiftPatchRef",
+    "description": "the form of a variant is required at creation",
+    "dictionary": "standard",
+    "script": "create variant() under entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "MISSING_REQUIRED_PROPERTY", "kind": "static", "commandIndex": 1 } }
 ]

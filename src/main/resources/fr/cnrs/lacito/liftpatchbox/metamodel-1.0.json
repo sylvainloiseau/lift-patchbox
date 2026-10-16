@@ -49,11 +49,10 @@
     "variant": {
       "componentKind": "ordered",
       "children": ["pronunciation", "relation", "trait", "annotation", "field"],
-      "naturalIdentity": ["type", "target"],
-      "unnamedArguments": [],
+      "naturalIdentity": ["form"],
+      "unnamedArguments": ["form"],
       "properties": {
-        "type":   { "datatype": "string",    "qualifier": null, "required": true },
-        "target": { "datatype": "reference", "qualifier": null, "required": true }
+        "form": { "datatype": "multitext", "qualifier": "object", "required": true }
       }
     },
     "relation": {
@@ -144,7 +143,7 @@
       "naturalIdentity": ["type"],
       "unnamedArguments": ["type", "text"],
       "properties": {
-        "type": { "datatype": "string",    "qualifier": null,   "required": true },
+        "type": { "datatype": "string",    "qualifier": null,   "required": true, "writable": false },
         "text": { "datatype": "multitext", "qualifier": "meta", "required": true }
       }
     },

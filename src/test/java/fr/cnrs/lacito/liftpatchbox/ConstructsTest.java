@@ -4,8 +4,10 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import fr.cnrs.lacito.liftapi.model.LiftAnnotation;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import java.util.List;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -296,6 +298,48 @@ class ConstructsTest extends PatchTestSupport {
                 }
                 """);
             assertEquals(1, entry("tww", "memi").getSenses().size());
+        }
+
+        @Test
+        @DisplayName("a deleted annotation comes back at its own position")
+        void aDeletedAnnotationComesBackInPlace() {
+            apply("""
+                entry[form@tww = "memi"] {
+                  create annotation(type = "review", value = "a")
+                  create annotation(type = "review", value = "b")
+                  create annotation(type = "review", value = "c")
+                }
+                """);
+            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+                """
+                delete annotation#1 under entry[form@tww = "memi"]
+                create sense(gloss@en = "dog") under entry[form@tww = "memi"]
+                """);
+            assertEquals(List.of("a", "b", "c"),
+                entry("tww", "memi").getAnnotations().stream()
+                    .map(LiftAnnotation::getValue).toList());
+        }
+
+        @Test
+        @DisplayName("a deleted relation of a variant comes back at its own position")
+        void aDeletedRelationOfAVariantComesBackInPlace() {
+            apply("""
+                create variant(form@tww = "mamii")
+                  under entry[form@tww = "mami", hn = 1] {
+                  create relation(type = "synonym", target = entry[form@tww = "memi"])
+                  create relation(type = "antonym", target = entry[form@tww = "memi"])
+                }
+                """);
+            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+                """
+                delete relation#1
+                  under variant[form@tww = "mamii"]
+                  of entry[form@tww = "mami", hn = 1]
+                create sense(gloss@en = "dog") under entry[form@tww = "memi"]
+                """);
+            assertEquals(List.of("synonym", "antonym"),
+                entries("tww", "mami").get(0).getVariants().get(0).getRelations().stream()
+                    .map(r -> r.getType().getId()).toList());
         }
     }
 

@@ -147,7 +147,7 @@ public final class Metamodel {
                 Json.bool(p, "required", false),
                 identity.contains(e.getKey()),
                 // `writable` defaults to true, which it is for every property but
-                // one; a read-only property declares itself (Appendix A).
+                // two; a read-only property declares itself (Appendix A).
                 Json.bool(p, "writable", true)
             ));
         }

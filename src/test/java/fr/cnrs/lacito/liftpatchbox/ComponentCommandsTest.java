@@ -1,11 +1,17 @@
 package fr.cnrs.lacito.liftpatchbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import fr.cnrs.lacito.liftapi.model.FeatureSet;
+import fr.cnrs.lacito.liftapi.model.LiftFieldAndTraitDefinition;
 import fr.cnrs.lacito.liftapi.model.LiftSense;
+import fr.cnrs.lacito.liftapi.model.LiftTrait;
+import fr.cnrs.lacito.liftapi.model.LiftVariant;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -168,6 +174,111 @@ class ComponentCommandsTest extends PatchTestSupport {
         void refusesAMissingRequiredProperty() {
             refused(ErrorCode.MISSING_REQUIRED_PROPERTY,
                 "create note(type = \"general\") under entry[form@tww = \"memi\"]");
+        }
+
+        @Test
+        @DisplayName("creates a variant, whose kind is a variant-type trait")
+        void createsAVariantWithItsKindAsATrait() {
+            assertEffects(
+                apply("""
+                    create variant(form@tww = "mamii")
+                      under entry[form@tww = "mami", hn = 1] {
+                      create trait(type = "variant-type", value = "Dialectal Variant")
+                    }
+                    """),
+                "created:variant@1", "set:form@tww=mamii",
+                "created:trait@null", "set:type=variant-type", "set:value=Dialectal Variant");
+            LiftVariant variant = entries("tww", "mami").get(0).getVariants().get(0);
+            assertEquals("mamii", variant.getForms().getForm("tww").orElseThrow().toPlainText());
+            assertEquals("Dialectal Variant", variant.getTraits().get(0).getValue());
+        }
+
+        @Test
+        @DisplayName("creates a variant in the concise syntax, its form being the unnamed argument")
+        void createsAVariantInTheConciseSyntax() {
+            assertEffects(
+                applyConcise("c /e[f=\"mami\", hn=1] v(\"mamii\")"),
+                "created:variant@1", "set:form@tww=mamii");
+        }
+
+        @Test
+        @DisplayName("creates a trait whose definition has an option range, and writes its value")
+        void createsATraitWithAnOptionRange() {
+            // As FieldWorks declares variant-type when it exports the range: the
+            // trait holds a feature of that range, and a new value adds one.
+            FeatureSet range = dictionary.getHeader().addFeatureSet("variant-type");
+            range.addFeature("Free Variant");
+            LiftFieldAndTraitDefinition definition =
+                dictionary.getHeader().createTraitDefinition("variant-type");
+            definition.setDataModel(Optional.of("option"));
+            definition.setResolvedRange(Optional.of(range));
+            apply("""
+                create variant(form@tww = "mamii")
+                  under entry[form@tww = "mami", hn = 1] {
+                  create trait(type = "variant-type", value = "Free Variant")
+                }
+                """);
+            assertEffects(
+                apply("set value = \"Dialectal Variant\" on trait^variant-type "
+                    + "of variant[form@tww = \"mamii\"] of entry[form@tww = \"mami\", hn = 1]"),
+                "replaced:value:Free Variant->Dialectal Variant");
+            LiftTrait trait = entries("tww", "mami").get(0).getVariants().get(0).getTraits().get(0);
+            assertSame(range.getFeature("Dialectal Variant"), trait.getTypedValue());
+        }
+
+        @Test
+        @DisplayName("refuses a type on a variant, which has none")
+        void refusesATypeOnAVariant() {
+            refused(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+                "create variant(type = \"dialectal\", form@tww = \"mamii\") "
+                    + "under entry[form@tww = \"mami\", hn = 1]");
+        }
+
+        @Test
+        @DisplayName("refuses a target on a variant, whose links are relations")
+        void refusesATargetOnAVariant() {
+            refused(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+                "create variant(target = entry[form@tww = \"memi\"]) "
+                    + "under entry[form@tww = \"mami\", hn = 1]");
+        }
+
+        @Test
+        @DisplayName("refuses a variant without a form")
+        void refusesAVariantWithoutAForm() {
+            refused(ErrorCode.MISSING_REQUIRED_PROPERTY,
+                "create variant() under entry[form@tww = \"mami\", hn = 1]");
+        }
+
+        @Test
+        @DisplayName("refuses two variants with the same form, the form being their identity")
+        void refusesTwoVariantsWithTheSameForm() {
+            apply("create variant(form@tww = \"mamii\") "
+                + "under entry[form@tww = \"mami\", hn = 1]");
+            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+                "create variant(form@tww = \"mamii\") "
+                    + "under entry[form@tww = \"mami\", hn = 1]");
+        }
+
+        @Test
+        @DisplayName("places a relation of a variant where the at clause says")
+        void placesARelationOfAVariant() {
+            apply("""
+                create variant(form@tww = "mamii")
+                  under entry[form@tww = "mami", hn = 1] {
+                  create relation(type = "synonym", target = entry[form@tww = "memi"])
+                }
+                """);
+            assertEffects(
+                apply("""
+                    create relation(type = "antonym", target = entry[form@tww = "memi"])
+                      under variant[form@tww = "mamii"]
+                      of entry[form@tww = "mami", hn = 1]
+                      at beginning
+                    """),
+                "created:relation@1", "set:type=antonym", "set:target=e-3");
+            assertEquals(List.of("antonym", "synonym"),
+                entries("tww", "mami").get(0).getVariants().get(0).getRelations().stream()
+                    .map(r -> r.getType().getId()).toList());
         }
     }
 

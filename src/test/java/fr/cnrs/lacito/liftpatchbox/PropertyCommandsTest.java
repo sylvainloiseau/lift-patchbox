@@ -303,6 +303,48 @@ class PropertyCommandsTest extends PatchTestSupport {
     }
 
     @Nested
+    @DisplayName("the form of a variant, its writable identity")
+    class VariantForm {
+
+        private void twoVariants() {
+            apply("""
+                entry[form@tww = "mami", hn = 1] {
+                  create variant(form@tww = "mamii")
+                  create variant(form@tww = "mamee")
+                }
+                """);
+        }
+
+        @Test
+        @DisplayName("may be updated")
+        void mayBeUpdated() {
+            twoVariants();
+            assertEffects(
+                apply("update form@tww = \"mamiii\" on variant[form@tww = \"mamii\"] "
+                    + "of entry[form@tww = \"mami\", hn = 1]"),
+                "replaced:form@tww:mamii->mamiii");
+        }
+
+        @Test
+        @DisplayName("may not be given the form of a sibling")
+        void mayNotDuplicateASibling() {
+            twoVariants();
+            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+                "set form@tww = \"mamee\" on variant[form@tww = \"mamii\"] "
+                    + "of entry[form@tww = \"mami\", hn = 1]");
+        }
+
+        @Test
+        @DisplayName("may not lose its last qualified value")
+        void mayNotLoseItsLastValue() {
+            twoVariants();
+            refused(ErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
+                "clear form@tww on variant[form@tww = \"mamii\"] "
+                    + "of entry[form@tww = \"mami\", hn = 1]");
+        }
+    }
+
+    @Nested
     @DisplayName("re-keying a typed component")
     class Rekeying {
 
@@ -463,6 +505,53 @@ class PropertyCommandsTest extends PatchTestSupport {
             assertEffects(
                 applyConcise("s /memi t^CVpattern (v = \"CVCV\")"),
                 "replaced:value:CVC->CVCV");
+        }
+
+        private void aField() {
+            apply("create field(type = \"editorial\", text@en = \"to check\") "
+                + "under entry[form@tww = \"memi\"]");
+        }
+
+        @Test
+        @DisplayName("include the type of a field: set is refused")
+        void refuseSetOnAField() {
+            aField();
+            refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+                "set type = \"review\" on field^editorial of entry[form@tww = \"memi\"]");
+        }
+
+        @Test
+        @DisplayName("include the type of a field: update is refused")
+        void refuseUpdateOnAField() {
+            aField();
+            refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+                "update type = \"review\" on field^editorial of entry[form@tww = \"memi\"]");
+        }
+
+        @Test
+        @DisplayName("include the type of a field: clear is refused")
+        void refuseClearOnAField() {
+            aField();
+            refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+                "clear type on field^editorial of entry[form@tww = \"memi\"]");
+        }
+
+        @Test
+        @DisplayName("include the type of a field, refused statically and in the concise spelling")
+        void refuseTheTypeOfAFieldStatically() {
+            // No field exists, so a dynamic check would raise NOT_FOUND first.
+            LiftPatchError error = refusedConcise(ErrorCode.PROPERTY_IS_READ_ONLY,
+                "s /memi f^editorial (y = \"review\")");
+            assertTrue(error.kind() == ErrorKind.STATIC, "the check must be static");
+        }
+
+        @Test
+        @DisplayName("leave the text of a field writable")
+        void leaveTheTextOfAFieldWritable() {
+            aField();
+            assertEffects(
+                apply("update text@en = \"checked\" on field^editorial of entry[form@tww = \"memi\"]"),
+                "replaced:text@en:to check->checked");
         }
     }
 

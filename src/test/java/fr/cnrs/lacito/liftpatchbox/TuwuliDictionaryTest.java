@@ -10,6 +10,7 @@ import fr.cnrs.lacito.liftapi.LiftDictionary;
 import fr.cnrs.lacito.liftapi.model.Form;
 import fr.cnrs.lacito.liftapi.model.LiftEntry;
 import fr.cnrs.lacito.liftapi.model.LiftSense;
+import fr.cnrs.lacito.liftapi.model.LiftVariant;
 import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
@@ -18,6 +19,7 @@ import java.io.File;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeAll;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -86,6 +88,28 @@ class TuwuliDictionaryTest {
             LiftEntry entry = shared.getLiftDictionaryRegistry().getEntries().get(0);
             Plan plan = box().plan(shared,
                 "ensure entry[form@tww = \"" + form(entry) + "\", hn = 1]",
+                Syntax.REFERENCE, "<tww>");
+            assertTrue(plan.isOk(), () -> String.valueOf(plan.error()));
+        }
+
+        @Test
+        @DisplayName("a real variant is selected by its form, and its traits are reachable")
+        void aRealVariantIsSelectedByItsForm() {
+            // FieldWorks writes a variant with a form, no type and, here, no ref: its
+            // form identifies it, and its morph-type is a trait like any other.
+            LiftEntry entry = unambiguousEntries(shared).stream()
+                .filter(e -> !e.getVariants().isEmpty())
+                .filter(e -> variantForm(e.getVariants().get(0)).isPresent())
+                .filter(e -> e.getVariants().stream()
+                    .filter(v -> variantForm(v).equals(variantForm(e.getVariants().get(0))))
+                    .count() == 1)
+                .filter(e -> e.getVariants().get(0).getTraits().stream()
+                    .anyMatch(t -> "morph-type".equals(t.getSpecification().getName())))
+                .findFirst().orElseThrow();
+            String variant = variantForm(entry.getVariants().get(0)).orElseThrow();
+            Plan plan = box().plan(shared,
+                "ensure trait^morph-type under variant[form@tww = \"" + variant + "\"] "
+                    + "of entry[form@tww = \"" + form(entry) + "\"]",
                 Syntax.REFERENCE, "<tww>");
             assertTrue(plan.isOk(), () -> String.valueOf(plan.error()));
         }
@@ -223,6 +247,10 @@ class TuwuliDictionaryTest {
 
     private static String form(LiftEntry entry) {
         return entry.getForms().getForm("tww").map(Form::toPlainText).orElseThrow();
+    }
+
+    private static Optional<String> variantForm(LiftVariant variant) {
+        return variant.getForms().getForm("tww").map(Form::toPlainText);
     }
 
     private static String gloss(LiftSense sense) {

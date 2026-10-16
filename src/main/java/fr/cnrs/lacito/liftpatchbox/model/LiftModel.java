@@ -40,7 +40,7 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
-import javafx.collections.ObservableList;
+import java.util.function.IntConsumer;
 
 /**
  * The single place that knows how the LiftPatch metamodel maps onto the
@@ -56,19 +56,28 @@ import javafx.collections.ObservableList;
  *
  * <p>Every component type, every property and every parentage the metamodel of
  * Appendix A declares has a home in the dictionary model, and nothing this class
- * is asked to do is refused for want of somewhere to put it. Two declarations of
- * the metamodel exist precisely so that this remains true, and changing either of
+ * is asked to do is refused for want of somewhere to put it. Three declarations of
+ * the metamodel exist precisely so that this remains true, and changing any of
  * them would reopen a gap:</p>
  *
  * <ul>
- *   <li>{@code trait.type} is declared {@code "writable": false} (section 4.5).
- *       The dictionary model fixes a trait's definition when the trait is built,
- *       and that definition is both the key the trait is stored under and what
- *       gives its value a datatype. The language therefore refuses to rewrite it
- *       with {@code PROPERTY_IS_READ_ONLY}, statically, rather than letting a
- *       command reach a component that cannot carry it out. A {@code note} and a
+ *   <li>{@code trait.type} and {@code field.type} are declared
+ *       {@code "writable": false} (section 4.5). The dictionary model fixes the
+ *       definition of a trait or a field when it is built, and that definition is
+ *       the key its parent stores it under; for a trait it also gives the value a
+ *       datatype. The model offers no way to change it ({@code LiftField}'s
+ *       {@code specificationProperty()} is read-only, and there is no
+ *       {@code retypeField}). The language therefore refuses to rewrite it with
+ *       {@code PROPERTY_IS_READ_ONLY}, statically, rather than letting a command
+ *       reach a component that cannot carry it out. A {@code note} and a
  *       {@code translation} are keyed by their type too, but theirs is writable:
  *       their parent re-keys them in place when {@code setType} is called;</li>
+ *   <li>{@code variant} has a {@code form} and neither a {@code type} nor a
+ *       {@code target}. The dictionary model, like LIFT, gives a variant no type,
+ *       and its kind is an ordinary {@code variant-type} trait. The model's
+ *       {@code ref} on a variant is outside the language: one read from a file is
+ *       kept, and is unlinked and restored around a deletion like any inbound
+ *       reference, but a script neither reads nor writes it;</li>
  *   <li>a {@code reversal} holds only sub-reversals, and its natural identity is
  *       {@code type + form} rather than {@code type + target}: the dictionary
  *       model gives a reversal forms, a type and nested reversals, and no
@@ -454,11 +463,6 @@ public final class LiftModel {
                 case "type" -> featureId(y.getType());
                 default -> Optional.empty();
             };
-            case LiftVariant v -> switch (property) {
-                case "type" -> featureId(v.getType());
-                case "target" -> reference(v.getRefId(), v.getRefObject());
-                default -> Optional.empty();
-            };
             case LiftRelation r -> switch (property) {
                 case "type" -> featureId(r.getType());
                 case "target" -> reference(r.getRefId(), r.getRefObject());
@@ -546,6 +550,8 @@ public final class LiftModel {
                 case "gloss" -> Optional.of(y.getGlosses());
                 default -> Optional.empty();
             };
+            case LiftVariant v -> "form".equals(property)
+                ? Optional.of(v.getForms()) : Optional.empty();
             case LiftReversal l -> "form".equals(property)
                 ? Optional.of(l.getForms()) : Optional.empty();
             case LiftIllustration i -> "label".equals(property)
@@ -629,17 +635,6 @@ public final class LiftModel {
                     default -> throw unsupportedProperty("etymology", property);
                 }
             }
-            case LiftVariant v -> {
-                switch (property) {
-                    case "type" -> setFeature(
-                        v.getType(), value, dictionary.getHeader().getVariantTypeManager(),
-                        f -> v.setType(f));
-                    case "target" -> setReference(
-                        value, v.getRefId().orElse(null), v.getRefObject(),
-                        v::setRefId, v::setRefObject);
-                    default -> throw unsupportedProperty("variant", property);
-                }
-            }
             case LiftRelation r -> {
                 switch (property) {
                     case "type" -> setFeature(
@@ -661,9 +656,9 @@ public final class LiftModel {
             case LiftTrait t -> {
                 switch (property) {
                     case "value" -> {
-                        String old = t.getValue();
-                        t.setValue(value == null ? "" : value);
-                        journal.record(() -> t.setValue(old));
+                        Object old = t.getTypedValue();
+                        t.setTypedValue(LiftTrait.parseValue(t.getSpecification(), value));
+                        journal.record(() -> t.setTypedValue(old));
                     }
                     case "type" -> throw new UnsupportedByModelException(
                         "`trait.type` is read-only (section 4.5) and the validator refuses a "
@@ -708,11 +703,13 @@ public final class LiftModel {
                 setFeature(t.getType(), value,
                     dictionary.getHeader().getTranslationTypeManager(), t::setType);
             }
-            case LiftField f -> {
-                if (!"type".equals(property)) {
-                    throw unsupportedProperty("field", property);
+            case LiftField _ -> {
+                if ("type".equals(property)) {
+                    throw new UnsupportedByModelException(
+                        "`field.type` is read-only (section 4.5) and the validator refuses a "
+                            + "command that writes it; reaching this point is a defect");
                 }
-                retypeField(f, value);
+                throw unsupportedProperty("field", property);
             }
             case GrammaticalInfo g -> {
                 if (!"value".equals(property)) {
@@ -859,26 +856,6 @@ public final class LiftModel {
         }
     }
 
-    private void retypeField(LiftField field, String value) {
-        AbstractExtensibleWithField parent = field.getParent();
-        LiftFieldAndTraitDefinition old = field.getSpecification();
-        LiftFieldAndTraitDefinition fresh =
-            dictionary.getHeader().getOrCreateFieldDefinitions(value);
-        if (parent == null) {
-            field.specificationProperty().set(fresh);
-            journal.record(() -> field.specificationProperty().set(old));
-            return;
-        }
-        parent.deleteField(field);
-        field.specificationProperty().set(fresh);
-        parent.addField(field);
-        journal.record(() -> {
-            parent.deleteField(field);
-            field.specificationProperty().set(old);
-            parent.addField(field);
-        });
-    }
-
     // ===================================================================
     // Creating, deleting and moving components
     // ===================================================================
@@ -973,10 +950,10 @@ public final class LiftModel {
         LiftSense sense = LiftSense.create();
         AbstractLiftRoot node = requireNode(parent);
         if (node instanceof LiftEntry entry) {
-            insert(sense, position, entry.sensesProperty(), () -> entry.addSense(sense),
+            insert(position, entry.getSenses(), i -> entry.addSense(i, sense),
                 () -> entry.deleteSense(sense));
         } else if (node instanceof LiftSense host) {
-            insert(sense, position, host.subSensesProperty(), () -> host.addSense(sense),
+            insert(position, host.getSenses(), i -> host.addSense(i, sense),
                 () -> host.deleteSense(sense));
         } else {
             throw unsupportedParent(parent, "sense");
@@ -987,7 +964,7 @@ public final class LiftModel {
     private ComponentRef createExample(ComponentRef parent, NewComponent spec, Integer position) {
         LiftSense sense = requireType(parent, LiftSense.class, "example");
         LiftExample example = LiftExample.create();
-        insert(example, position, sense.examplesProperty(), () -> sense.addExample(example),
+        insert(position, sense.getExamples(), i -> sense.addExample(i, example),
             () -> sense.deleteExample(example));
         return new ComponentRef.Node("example", example);
     }
@@ -1005,10 +982,7 @@ public final class LiftModel {
     private ComponentRef createVariant(ComponentRef parent, NewComponent spec, Integer position) {
         LiftEntry entry = requireType(parent, LiftEntry.class, "variant");
         LiftVariant variant = new LiftVariant();
-        variant.setType(dictionary.getHeader().getVariantTypeManager()
-            .getOrCreateFeature(required(spec, "type", "variant")));
-        setCreatedReference(spec.scalar("target"), variant::setRefId, variant::setRefObject);
-        insert(variant, position, entry.variantsProperty(), () -> entry.addVariant(variant),
+        insert(position, entry.getVariants(), i -> entry.addVariant(i, variant),
             () -> entry.deleteVariant(variant));
         return new ComponentRef.Node("variant", variant);
     }
@@ -1020,12 +994,12 @@ public final class LiftModel {
         setCreatedReference(spec.scalar("target"), relation::setRefId, relation::setRefObject);
         AbstractLiftRoot node = requireNode(parent);
         switch (node) {
-            case LiftEntry entry -> insert(relation, position, entry.relationsProperty(),
-                () -> entry.addRelation(relation), () -> entry.deleteRelation(relation));
-            case LiftSense sense -> insert(relation, position, sense.relationsProperty(),
-                () -> sense.addRelation(relation), () -> sense.deleteRelation(relation));
-            case LiftVariant variant -> insert(relation, position, variant.relationsProperty(),
-                () -> variant.addRelation(relation), () -> variant.deleteRelation(relation));
+            case LiftEntry entry -> insert(position, entry.getRelations(),
+                i -> entry.addRelation(i, relation), () -> entry.deleteRelation(relation));
+            case LiftSense sense -> insert(position, sense.getRelations(),
+                i -> sense.addRelation(i, relation), () -> sense.deleteRelation(relation));
+            case LiftVariant variant -> insert(position, variant.getRelations(),
+                i -> variant.addRelation(i, relation), () -> variant.deleteRelation(relation));
             default -> throw unsupportedParent(parent, "relation");
         }
         return new ComponentRef.Node("relation", relation);
@@ -1037,12 +1011,11 @@ public final class LiftModel {
         LiftPronunciation pronunciation = LiftPronunciation.create();
         AbstractLiftRoot node = requireNode(parent);
         switch (node) {
-            case LiftEntry entry -> insert(pronunciation, position, entry.pronunciationsProperty(),
-                () -> entry.addPronunciation(pronunciation),
+            case LiftEntry entry -> insert(position, entry.getPronunciations(),
+                i -> entry.addPronunciation(i, pronunciation),
                 () -> entry.deletePronunciation(pronunciation));
-            case LiftVariant variant -> insert(pronunciation, position,
-                variant.pronunciationsProperty(),
-                () -> variant.addPronunciation(pronunciation),
+            case LiftVariant variant -> insert(position, variant.getPronunciations(),
+                i -> variant.addPronunciation(i, pronunciation),
                 () -> variant.deletePronunciation(pronunciation));
             default -> throw unsupportedParent(parent, "pronunciation");
         }
@@ -1055,16 +1028,16 @@ public final class LiftModel {
         LiftSense sense = requireType(parent, LiftSense.class, "illustration");
         LiftIllustration illustration =
             new LiftIllustration(required(spec, "url", "illustration"));
-        insert(illustration, position, sense.illustrationsProperty(),
-            () -> sense.addIllustration(illustration), () -> sense.deleteIllustration(illustration));
+        insert(position, sense.getIllustrations(),
+            i -> sense.addIllustration(i, illustration), () -> sense.deleteIllustration(illustration));
         return new ComponentRef.Node("illustration", illustration);
     }
 
     private ComponentRef createMedia(ComponentRef parent, NewComponent spec, Integer position) {
         LiftPronunciation pronunciation = requireType(parent, LiftPronunciation.class, "media");
         LiftMedia media = new LiftMedia(required(spec, "url", "media"));
-        insert(media, position, pronunciation.mediasProperty(),
-            () -> pronunciation.addMedia(media), () -> pronunciation.deleteMedia(media));
+        insert(position, pronunciation.getMedias(),
+            i -> pronunciation.addMedia(i, media), () -> pronunciation.deleteMedia(media));
         return new ComponentRef.Node("media", media);
     }
 
@@ -1074,8 +1047,8 @@ public final class LiftModel {
                 .getOrCreateFeature(required(spec, "type", "reversal")));
         AbstractLiftRoot node = requireNode(parent);
         switch (node) {
-            case LiftSense sense -> insert(reversal, position, sense.reversalsProperty(),
-                () -> sense.addReversal(reversal), () -> sense.deleteReversal(reversal));
+            case LiftSense sense -> insert(position, sense.getReversals(),
+                i -> sense.addReversal(i, reversal), () -> sense.deleteReversal(reversal));
             default -> throw unsupportedParent(parent, "reversal");
         }
         return new ComponentRef.Node("reversal", reversal);
@@ -1084,7 +1057,12 @@ public final class LiftModel {
     private ComponentRef createTrait(ComponentRef parent, NewComponent spec, Integer position) {
         LiftFieldAndTraitDefinition definition = dictionary.getHeader()
             .getOrCreateTraitsDefinitions(required(spec, "type", "trait"));
-        LiftTrait trait = new LiftTrait(definition, spec.scalars().getOrDefault("value", ""));
+        // The value is parsed after the definition's data model, as the dictionary
+        // model's own reader and TraitBuilder do: a trait whose definition has an
+        // option range holds a feature, created in the range when it is new.
+        LiftTrait trait = new LiftTrait(definition);
+        trait.setTypedValue(
+            LiftTrait.parseValue(definition, spec.scalars().getOrDefault("value", "")));
         if (parent instanceof ComponentRef.Category category) {
             GrammaticalInfo info = grammaticalInfo(category.host()).orElseThrow(() ->
                 new UnsupportedByModelException(
@@ -1096,7 +1074,7 @@ public final class LiftModel {
         }
         AbstractLiftRoot node = requireNode(parent);
         if (node instanceof AbstractExtensibleWithoutField host) {
-            insert(trait, position, host.traitsProperty(), () -> host.addTrait(trait),
+            insert(position, host.getTraits(), i -> host.addTrait(i, trait),
                 () -> host.deleteTrait(trait));
             return new ComponentRef.Node("trait", trait);
         }
@@ -1119,8 +1097,8 @@ public final class LiftModel {
         annotation.setWho(spec.scalar("who"));
         AbstractLiftRoot node = requireNode(parent);
         if (node instanceof AbstractExtensibleWithoutField host) {
-            insert(annotation, position, host.annotationsProperty(),
-                () -> host.addAnnotation(annotation), () -> host.deleteAnnotation(annotation));
+            insert(position, host.getAnnotations(),
+                i -> host.addAnnotation(i, annotation), () -> host.deleteAnnotation(annotation));
             return new ComponentRef.Node("annotation", annotation);
         }
         if (node instanceof LiftTrait trait) {
@@ -1180,19 +1158,28 @@ public final class LiftModel {
     /**
      * Insert a component into an ordered sibling list at a 1-based position.
      *
-     * <p>The component is appended through the model's own {@code addX} method,
-     * which is what registers it in the dictionary, and only then moved into place
-     * through the observable list, which reorders without unregistering.</p>
+     * <p>The component is added at its index through the model's own indexed
+     * {@code addX(int, …)}, which is what registers it in the dictionary; the
+     * sibling lists the model hands out are read-only views. A missing position,
+     * or one past the end, appends.</p>
+     *
+     * @param position the 1-based position, or {@code null} for the last one
+     * @param siblings the current same-type siblings, read only for their number
+     * @param addAt    adds the component at a 0-based index
+     * @param remove   the inverse, recorded in the journal
      */
-    private <T> void insert(
-        T component, Integer position, ObservableList<T> list, Runnable add, Runnable remove
-    ) {
-        add.run();
-        if (position != null && position - 1 < list.size() - 1 && position >= 1) {
-            list.remove(component);
-            list.add(position - 1, component);
-        }
+    private void insert(Integer position, List<?> siblings, IntConsumer addAt, Runnable remove) {
+        addAt.accept(indexWithin(position == null ? -1 : position - 1, siblings));
         journal.record(remove);
+    }
+
+    /**
+     * A 0-based index at which to add a component among {@code siblings}: the index
+     * itself when it designates a position in the list or just after it, the end of
+     * the list otherwise.
+     */
+    private static int indexWithin(int index, List<?> siblings) {
+        return index >= 0 && index <= siblings.size() ? index : siblings.size();
     }
 
     /**
@@ -1292,60 +1279,79 @@ public final class LiftModel {
         }
     }
 
+    /**
+     * Put a component back under {@code parent}, at the 0-based {@code position}
+     * among its same-type siblings when it is an ordered one; a position out of
+     * range appends. Typed components have no position and are simply added.
+     */
     private void reattach(AbstractLiftRoot parent, AbstractLiftRoot child, int position) {
         switch (child) {
-            case LiftSense s -> reinsert(s, position,
-                parent instanceof LiftEntry e ? e.sensesProperty()
-                    : ((LiftSense) parent).subSensesProperty(),
-                () -> {
-                    if (parent instanceof LiftEntry e) {
-                        e.addSense(s);
-                    } else {
-                        ((LiftSense) parent).addSense(s);
-                    }
-                });
-            case LiftExample x -> reinsert(x, position, ((LiftSense) parent).examplesProperty(),
-                () -> ((LiftSense) parent).addExample(x));
-            case LiftEtymology y -> ((LiftEntry) parent).addEtymology(y);
-            case LiftVariant v -> reinsert(v, position, ((LiftEntry) parent).variantsProperty(),
-                () -> ((LiftEntry) parent).addVariant(v));
-            case LiftRelation r -> {
+            case LiftSense s -> {
                 if (parent instanceof LiftEntry e) {
-                    reinsert(r, position, e.relationsProperty(), () -> e.addRelation(r));
-                } else if (parent instanceof LiftSense s) {
-                    reinsert(r, position, s.relationsProperty(), () -> s.addRelation(r));
+                    e.addSense(indexWithin(position, e.getSenses()), s);
                 } else {
-                    ((LiftVariant) parent).addRelation(r);
+                    LiftSense host = (LiftSense) parent;
+                    host.addSense(indexWithin(position, host.getSenses()), s);
+                }
+            }
+            case LiftExample x -> {
+                LiftSense sense = (LiftSense) parent;
+                sense.addExample(indexWithin(position, sense.getExamples()), x);
+            }
+            case LiftEtymology y -> {
+                LiftEntry entry = (LiftEntry) parent;
+                entry.addEtymology(indexWithin(position, entry.getEtymologies()), y);
+            }
+            case LiftVariant v -> {
+                LiftEntry entry = (LiftEntry) parent;
+                entry.addVariant(indexWithin(position, entry.getVariants()), v);
+            }
+            case LiftRelation r -> {
+                switch (parent) {
+                    case LiftEntry e -> e.addRelation(indexWithin(position, e.getRelations()), r);
+                    case LiftSense s -> s.addRelation(indexWithin(position, s.getRelations()), r);
+                    default -> {
+                        LiftVariant v = (LiftVariant) parent;
+                        v.addRelation(indexWithin(position, v.getRelations()), r);
+                    }
                 }
             }
             case LiftPronunciation p -> {
                 if (parent instanceof LiftEntry e) {
-                    reinsert(p, position, e.pronunciationsProperty(), () -> e.addPronunciation(p));
+                    e.addPronunciation(indexWithin(position, e.getPronunciations()), p);
                 } else {
-                    ((LiftVariant) parent).addPronunciation(p);
+                    LiftVariant v = (LiftVariant) parent;
+                    v.addPronunciation(indexWithin(position, v.getPronunciations()), p);
                 }
             }
-            case LiftIllustration i -> reinsert(i, position,
-                ((LiftSense) parent).illustrationsProperty(),
-                () -> ((LiftSense) parent).addIllustration(i));
-            case LiftMedia m -> ((LiftPronunciation) parent).addMedia(m);
-            case LiftReversal l -> ((LiftSense) parent).addReversal(l);
+            case LiftIllustration i -> {
+                LiftSense sense = (LiftSense) parent;
+                sense.addIllustration(indexWithin(position, sense.getIllustrations()), i);
+            }
+            case LiftMedia m -> {
+                LiftPronunciation pronunciation = (LiftPronunciation) parent;
+                pronunciation.addMedia(indexWithin(position, pronunciation.getMedias()), m);
+            }
+            case LiftReversal l -> {
+                fr.cnrs.lacito.liftapi.model.HasReversal host =
+                    (fr.cnrs.lacito.liftapi.model.HasReversal) parent;
+                host.addReversal(indexWithin(position, host.getReversals()), l);
+            }
             case LiftNote n -> ((AbstractNotable) parent).addNote(n);
             case LiftField f -> ((AbstractExtensibleWithField) parent).addField(f);
-            case LiftTrait t -> ((fr.cnrs.lacito.liftapi.model.HasTrait) parent).addTrait(t);
-            case LiftAnnotation a ->
-                ((fr.cnrs.lacito.liftapi.model.HasAnnotation) parent).addAnnotation(a);
+            case LiftTrait t -> {
+                fr.cnrs.lacito.liftapi.model.HasTrait host =
+                    (fr.cnrs.lacito.liftapi.model.HasTrait) parent;
+                host.addTrait(indexWithin(position, host.getTraits()), t);
+            }
+            case LiftAnnotation a -> {
+                fr.cnrs.lacito.liftapi.model.HasAnnotation host =
+                    (fr.cnrs.lacito.liftapi.model.HasAnnotation) parent;
+                host.addAnnotation(indexWithin(position, host.getAnnotations()), a);
+            }
             case LiftTranslation t -> ((LiftExample) parent).addTranslation(t);
             default -> throw new UnsupportedByModelException(
                 "the dictionary model cannot restore a " + child.getClass().getSimpleName());
-        }
-    }
-
-    private <T> void reinsert(T component, int position, ObservableList<T> list, Runnable add) {
-        add.run();
-        if (position >= 0 && position < list.size() - 1) {
-            list.remove(component);
-            list.add(position, component);
         }
     }
 

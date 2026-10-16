@@ -38,10 +38,10 @@ public record PropertyDef(
      * Whether this property is read-only: fixed when its component is created, and
      * never written again (section 4.5 of the specification).
      *
-     * <p>{@code trait.type} is the only one in the metamodel of Appendix A. A
-     * {@code set}, an {@code update} or a {@code clear} naming a read-only property
-     * raises {@code PROPERTY_IS_READ_ONLY}, and that check is made before the
-     * property's role is consulted, so it is the code reported.</p>
+     * <p>{@code trait.type} and {@code field.type} are the two in the metamodel of
+     * Appendix A. A {@code set}, an {@code update} or a {@code clear} naming a
+     * read-only property raises {@code PROPERTY_IS_READ_ONLY}, and that check is made
+     * before the property's role is consulted, so it is the code reported.</p>
      *
      * @return {@code true} when the metamodel declares {@code "writable": false}
      */

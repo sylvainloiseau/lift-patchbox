@@ -378,7 +378,7 @@ always designates at most one component. There is no first or second `note`, so:
 
 - an ordinal on a typed component raises `COMPONENT_NOT_ORDERED`, a static error;
 - an `at POSITION` clause on a command creating a typed component raises `COMPONENT_NOT_ORDERED`;
-- `move` on a typed component raises `COMPONENT_NOT_ORDERED`. A typed component is re-keyed by writing its `type`, not by moving it — unless that `type` is read-only, as a `trait`'s is (section "4.5") — and is re-parented by deleting it and creating it under the new parent;
+- `move` on a typed component raises `COMPONENT_NOT_ORDERED`. A typed component is re-keyed by writing its `type`, not by moving it — unless that `type` is read-only, as a `trait`'s or a `field`'s is (section "4.5") — and is re-parented by deleting it and creating it under the new parent;
 - the type key `^t` (section "5.3.4") is the concise way to designate one, in both syntaxes: `note^general` is `note[type = "general"]`.
 
 **Singleton components.** A singleton is not a collection at all: a host
@@ -449,8 +449,7 @@ normative metamodel"; in case of divergence, Appendix A prevails.
 | Etymology | `gloss` | multitext | M | no | no | yes |
 | Etymology | `source` | string | — | no | no | yes |
 | Etymology | `type` | string | — | yes | part of `type + form` | yes |
-| Variant | `type` | string | — | yes | part of `type + target` | yes |
-| Variant | `target` | reference | — | yes | part of `type + target` | yes |
+| Variant | `form` | multitext | O | yes, at least one qualified value | yes: one qualified value | yes |
 | Relation | `type` | string | — | yes | part of `type + target` | yes |
 | Relation | `target` | reference | — | yes | part of `type + target` | yes |
 | Reversal | `form` | multitext | O | yes, at least one qualified value | part of `type + form` | yes |
@@ -469,10 +468,24 @@ normative metamodel"; in case of divergence, Appendix A prevails.
 | Annotation | `who` | string | — | no | no | yes |
 | Note | `type` | string | — | yes | yes | yes |
 | Note | `text` | multitext | M | yes, at least one qualified value | no | yes |
-| Field | `type` | string | — | yes | yes | yes |
+| Field | `type` | string | — | yes | yes | **no** (section "4.5") |
 | Field | `text` | multitext | M | yes, at least one qualified value | no | yes |
 | Translation | `type` | string | — | yes | yes | yes |
 | Translation | `text` | multitext | M | yes, at least one qualified value | no | yes |
+
+A `variant` is identified by its `form`, written in the object language like the
+form of an entry. It has no `type`: LIFT gives a variant no type attribute, and the
+kind of a variant — dialectal, free, plural… — is recorded, as FieldWorks records
+it, by a `trait` named `variant-type`, written like any other trait. A link from a
+variant to another entry or sense, when one is wanted, is a `relation` child of the
+variant:
+
+```LiftPatchRef
+create variant(form@tww = "mamii")
+  under entry[form@tww = "mami", hn = 1] {
+  create trait(type = "variant-type", value = "Dialectal Variant")
+}
+```
 
 ### 4.2 The multitext datatype
 
@@ -593,6 +606,7 @@ What it refuses is being the property a command *writes*:
 create trait(type = "CVpattern", value = "CVC") under entry[form@tww = "mami"]
 set value = "CVCV" on trait^CVpattern of entry[form@tww = "mami"]   # legal
 set type = "syllable" on trait^CVpattern of entry[form@tww = "mami"] # PROPERTY_IS_READ_ONLY
+set type = "review" on field^editorial of entry[form@tww = "mami"]   # PROPERTY_IS_READ_ONLY
 ```
 
 To give a component a read-only property it does not have, delete it and create
@@ -601,12 +615,14 @@ a property that the data model fixes at construction cannot be rewritten in
 place, and silently deleting and recreating the component behind the writer's
 back would lose its children and its position.
 
-In the metamodel of Appendix A, `trait.type` is the only read-only property.
-This is not an accident of the current version: a `trait` is a typed component
-whose `type` is the key it is stored under *and* the name of the definition that
-gives its value a datatype, so changing it would change what the value means.
-Every other typed component type — `note`, `field`, `translation` — is re-keyed
-by writing its `type` in the ordinary way (section "5.3.4").
+In the metamodel of Appendix A, `trait.type` and `field.type` are the two
+read-only properties. This is not an accident of the current version: the `type`
+of a `trait` or of a `field` is the key it is stored under *and* the name of the
+definition, declared in the dictionary header, that describes it. The data model
+fixes that definition when the component is built; for a `trait`, it also gives
+the value a datatype, so changing it would change what the value means. The other
+typed component types — `note`, `translation` — are re-keyed by writing their
+`type` in the ordinary way (section "5.3.4").
 
 ## 5. Selection
 
@@ -782,7 +798,7 @@ Example:
 ```text
 sense[id = "pig-44"]
 sense[gloss@en = "pig"]
-variant[type="dialectal", target = sense[id = "pig-44"]]
+variant[form@tww = "mamii"]
 media[url="http://www.example.org/Image.png"]
 entry[form@tww = "mami", has-gloss@en="pig"]
 entry[form@tww = "mami", has sense[gloss@en = "pig"]]
@@ -1310,9 +1326,9 @@ set text@en = "borrowed from Tok Pisin"
 Since a typed component has no position, there is no `move` and no `at` clause
 for it: to change the key of a typed component, write its `type` with `set`,
 which re-keys it in place and is checked against the uniqueness invariant like
-any other identity assignment (section "5.2"). The one exception is the `trait`,
-whose `type` is read-only: it is re-keyed by deleting it and creating it again
-(section "4.5").
+any other identity assignment (section "5.2"). The two exceptions are the `trait`
+and the `field`, whose `type` is read-only: they are re-keyed by deleting them and
+creating them again (section "4.5").
 
 ### 5.4 Command applicability
 
@@ -1373,7 +1389,7 @@ are easy to get wrong and each is exercised by the conformance corpus:
 
 - `id` and the ordinal are allowed as the step of an `on` clause: `set form = { tww: "mami" } on entry[id = "entry-42"]` and `set text@tpi = "…" on example#1 within sense[...]` are both legal (cases C-018 and C-031);
 - so are the type key and the singleton step: `set text@en = "…" on note^general of entry[...]` and `set value = "Noun" on category of sense[...]` are the ordinary way to write on a typed and on a singleton component;
-- none of them may be *written*: `set id = …`, `update hn = …`, `clear #2`, `set ^general = …` are all forbidden, whatever the component type. The `type` property of a typed component, by contrast, **is** an ordinary property and may be written: `set type = "general" on note^etymology` re-keys the note (section "5.3.4"). A `trait`'s `type` is the one that may not, being read-only (section "4.5");
+- none of them may be *written*: `set id = …`, `update hn = …`, `clear #2`, `set ^general = …` are all forbidden, whatever the component type. The `type` property of a typed component, by contrast, **is** an ordinary property and may be written: `set type = "general" on note^etymology` re-keys the note (section "5.3.4"). A `trait`'s and a `field`'s `type` may not, being read-only (section "4.5");
 - a label is a whole step and never a predicate, so `on $pig` is legal and `[label = $pig]` does not exist.
 
 ### 5.5 Language qualifier rules
@@ -2150,7 +2166,7 @@ The duplicate detection works with the properties enumerated in the table in the
 section "5.2". It means that, under the same parent, two
 senses are identical if they have the same qualified gloss; two examples are
 identical if they have the same qualified text, two variants are identical if
-they have the same type and target.
+they have the same qualified form.
 
 The same multitext can be referred twice with a different language qualifier.
 
@@ -2264,7 +2280,7 @@ precondition is what is wanted, `ensure` states it more clearly.
 
 Further rules:
 
-- An `upsert` command fails with `MISSING_IDENTITY_PROPERTY` if `K` does not cover the whole natural identity property set of `T` (qualified text for an example, type + target for a variant, etc.).
+- An `upsert` command fails with `MISSING_IDENTITY_PROPERTY` if `K` does not cover the whole natural identity property set of `T` (qualified text for an example, qualified form for a variant, etc.).
 - Every property that the metamodel declares required must be present in `K ∪ A`, so that the create branch can satisfy rule 1 of section "6.1"; otherwise `MISSING_REQUIRED_PROPERTY` is raised. This is a static check: which branch will run is not known before execution.
 - The `at` clause, if present, applies only to the create branch; it is ignored by the select branch. It is not available at all when `T` is `entry` (section "6.2").
 - `as $LABEL`, if present, binds the created component in the create branch and the resolved component in the select branch.
@@ -2410,7 +2426,7 @@ move ORDERED-COMPONENT under PARENT [ under DESTINATION-PARENT ] at POSITION
 A `move` whose target step names a **typed** component type raises
 `COMPONENT_NOT_ORDERED`, a static error: `move note[type = "general"] …` asks to
 reorder a map. A typed component is re-keyed by writing its `type` with `set`
-(section "5.3.4") — or, when that `type` is read-only as a `trait`'s is, by
+(section "5.3.4") — or, when that `type` is read-only as a `trait`'s or a `field`'s is, by
 deleting it and creating it again (section "4.5") — and is re-parented by
 deleting it and creating it under the new parent, which is a different operation
 with different effects and is written out as such. A `move` whose target step names a **singleton** raises
@@ -2728,6 +2744,7 @@ The three cases a lexicographer meets most often, each naming the row of section
 | `clear url on illustration[...]` | `Illustration.url`: scalar, required, identity (R1) | `CANNOT_CLEAR_IDENTITY_PROPERTY` |
 | `clear value on trait[...]` | `Trait.value`: scalar, required, non-identity (R3) | `CANNOT_CLEAR_REQUIRED_PROPERTY` |
 | `clear type on trait[...]` | `Trait.type`: read-only (section "4.5") | `PROPERTY_IS_READ_ONLY` |
+| `clear type on field[...]` | `Field.type`: read-only (section "4.5") | `PROPERTY_IS_READ_ONLY` |
 | `clear value on category of sense[...]` | `Category.value`: scalar, optional (R5) | the value is removed, or `UNSET_PROPERTY` if it was already unset |
 
 And the same for a required multitext, `Entry.form` (R4), where the outcome
@@ -2767,10 +2784,10 @@ on relation[type = "synonym", target = entry[form@tww = "moni"]]
 of entry[form@tww = "mami"]
 ```
 
-**The selector of a `relation` or a `variant` must name its current target.**
-The natural identity property set of both is `type + target` (section "4.1"), so
-strategy S3 requires both properties, and a command that rewrites a `target` has
-to say which link it is rewriting. Writing
+**The selector of a `relation` must name its current target.**
+The natural identity property set of a `relation` is `type + target` (section
+"4.1"), so strategy S3 requires both properties, and a command that rewrites a
+`target` has to say which link it is rewriting. Writing
 `on relation[type = "synonym"]` alone is `INCOMPLETE_SELECTOR`: `type` is half an
 identity key, and an entry may carry several `synonym` relations. Three spellings
 are available, and the second is usually the shortest:
@@ -2789,8 +2806,8 @@ create relation(type = "synonym", target = entry[form@tww = "moni"])
 set target = entry[form@tww = "memi"] on $link
 ```
 
-Note that `relation` and `variant` carry no `id` (section "5.3.1" gives one to
-`entry` and `sense` only), so strategy S2 is not available on them.
+Note that a `relation` carries no `id` (section "5.3.1" gives one to `entry` and
+`sense` only), so strategy S2 is not available on it.
 
 A relation to a sense may be written:
 
@@ -2808,7 +2825,7 @@ The LiftPatchRef DSL is not in charge of managing the integrity of the reference
 it is assigned in a command — never to a bare string:
 
 ```text
-variant[type="dialectal", target = entry[id = "pig-44"]]
+relation[type = "synonym", target = entry[id = "pig-44"]]
 ```
 
 - The predicate `target = CHAIN` holds when the component denoted by `CHAIN` is the very component the stored reference points to. Formally: the chain is resolved first, to exactly one component `c`, and the predicate then compares the stored value with the `id` of `c`.
@@ -2833,11 +2850,11 @@ When a reference is **assigned**, the validator further verifies that:
 - the value resolves to exactly one existing component. This is the ordinary resolution of a chain (section "5.1.5"), so a chain matching nothing raises `NOT_FOUND` and one matching several raises `AMBIGUOUS_REFERENCE`; a reference target needs no error code of its own;
 - the component designated is an `entry` or a `sense`; otherwise `INVALID_TARGET` is raised. This is a **static** error, not a dynamic one: the component type is written in the step that designates it — the leftmost step of a LiftPatchRef chain, the last step of a LiftPatchShort path — or, for a label, is known from the command that bound it. `set target = example[text@tww = "a mami jefi"] of …` is rejected before the dictionary is consulted.
 
-These rules apply to the `target` property of the two component types that carry
-one: `variant` and `relation`. Since `type + target` is the natural identity of
-both, two of them with the same type and the same target under one parent are
-duplicates, refused by the invariant of section "5.2" with
-`CANNOT_CREATE_DUPLICATE`; nothing specific to references is involved.
+These rules apply to the `target` property of `relation`, the one component type
+that carries one. Its natural identity is `type + target`: two relations with the
+same type and the same target under one parent are duplicates, refused by the
+invariant of section "5.2" with `CANNOT_CREATE_DUPLICATE`; nothing specific to
+references is involved.
 
 ## 11. Blocks
 
@@ -3632,8 +3649,8 @@ s /e[f="mami"]/r[y="synonym", a = /e[id="entry-42"]] (a = /memi)
   The path is resolved like any other path and must yield exactly one component. A label may be used instead: `(a = $newEntry)`. A bare string such as `(a = "entry-42")` is rejected with `REFERENCE_VALUE_MUST_BE_A_CHAIN`.
 
   Both lines above select the relation before rewriting its target, and neither
-  writes `r[y="synonym"]` alone: the natural identity of a `relation` and of a
-  `variant` is `type + target`, so a unique selector on one of them must give both
+  writes `r[y="synonym"]` alone: the natural identity of a `relation` is
+  `type + target`, so a unique selector on one must give both
   properties — or reach it by its ordinal, as the first line does (Part 2,
   section "10"). `r[y="synonym"]` on its own is `INCOMPLETE_SELECTOR`.
 
@@ -3641,7 +3658,7 @@ s /e[f="mami"]/r[y="synonym", a = /e[id="entry-42"]] (a = /memi)
   to a path and not to a quoted id (Part 2, section "10"):
 
 ```LiftPatchShort
-d /e[f="mami"] v[y="dialectal", a = /memi]
+d /e[f="mami"] r[y="synonym", a = /memi]
 ```
 
 A path used as a **reference value** — the `/memi` above, or the `(a = /memi)`
@@ -3853,8 +3870,8 @@ Parsing is deterministic: the **last top-level whitespace-separated path token**
 before any `to`, `at` or `as` clause is the direct target, and whatever precedes
 it is the parent path. *Top-level* means outside every bracket, parenthesis,
 brace and quoted string, so the space inside `e[f="mami", hn=1]` and the ones
-inside `v[y="dialectal", a = /memi]` do not split a token, and
-`d /e[f="mami", hn=1] v[y="dialectal", a = /memi]` has a one-step parent path and
+inside `r[y="synonym", a = /memi]` do not split a token, and
+`d /e[f="mami", hn=1] r[y="synonym", a = /memi]` has a one-step parent path and
 a one-step target. `m` is unambiguous for the same reason, and because it may not
 target an `entry` and may not appear in a block, so its source parent path is
 always present and always absolute.
@@ -4525,7 +4542,7 @@ argument beyond the number given for its type, raises
 | Annotation | 2 | type, value |
 | Reversal | 2 | type, form |
 | Relation | — | — |
-| Variant | — | — |
+| Variant | 1 | form |
 | Category | — | — — a singleton is never created (Part 1, section "3.1") |
 
 The mapping is the required properties of the type, in a fixed order, which is
@@ -4538,10 +4555,10 @@ orders do differ — Appendix A writes `etymology`'s properties as `form, gloss,
 source, type`, while `c /… y("borrowing", "mami")` maps its two arguments to
 `type, form`.
 
-The two component types with no unnamed form are exactly the two whose required
-properties include a `reference`: `relation` and `variant` take a `type` and a
-`target`, and a target is a path, not a string (section "3"). Writing them out
-avoids a line in which a quoted string would mean a component:
+The one component type with no unnamed form, besides the singleton `category`, is
+`relation`, the one whose required properties include a `reference`: it takes a
+`type` and a `target`, and a target is a path, not a string (section "3"). Writing
+them out avoids a line in which a quoted string would mean a component:
 
 ```LiftPatchShort
 c /mami r(y="synonym", a = /memi)
@@ -4838,11 +4855,10 @@ the same shape with additional entries, under three conditions:
     "variant": {
       "componentKind": "ordered",
       "children": ["pronunciation", "relation", "trait", "annotation", "field"],
-      "naturalIdentity": ["type", "target"],
-      "unnamedArguments": [],
+      "naturalIdentity": ["form"],
+      "unnamedArguments": ["form"],
       "properties": {
-        "type":   { "datatype": "string",    "qualifier": null, "required": true },
-        "target": { "datatype": "reference", "qualifier": null, "required": true }
+        "form": { "datatype": "multitext", "qualifier": "object", "required": true }
       }
     },
     "relation": {
@@ -4933,7 +4949,7 @@ the same shape with additional entries, under three conditions:
       "naturalIdentity": ["type"],
       "unnamedArguments": ["type", "text"],
       "properties": {
-        "type": { "datatype": "string",    "qualifier": null,   "required": true },
+        "type": { "datatype": "string",    "qualifier": null,   "required": true, "writable": false },
         "text": { "datatype": "multitext", "qualifier": "meta", "required": true }
       }
     },
@@ -4976,7 +4992,7 @@ Reading rules:
 - `componentKind` is the component kind of section "3.1", one of `"ordered"`, `"typed"` and `"singleton"`. It is the single declaration from which every rule about position, ordinals, type keys, the `at` clause and `move` is derived, and an implementation dispatches on it rather than on the component name. Two invariants tie it to the rest of the document and MUST hold of any metamodel, this one and any extension of it: a `"typed"` component type has `"naturalIdentity": ["type"]` and no other identity property, since the map key *is* the identity; and a `"singleton"` component type has an empty `naturalIdentity` and no `required` property, since it is never created and there is never a second one to distinguish it from.
 - `qualifier` gives the language kind of a multitext (`"object"` or `"meta"`) and is `null` for every scalar property. A property with a non-null `qualifier` is exactly a property that accepts an `@L` key and the `@*` wildcard.
 - `required` is *required at creation*: for a multitext, at least one qualified value.
-- `writable` is *writable after creation*, and defaults to `true` when it is absent, which it is for every property but one. A property declared `"writable": false` is a **read-only** property (section "4.5"): it is initialized at creation like any other and is refused as the target of a `set`, an `update` or a `clear` with `PROPERTY_IS_READ_ONLY`. An implementation dispatches on the flag rather than on the property name, so an extended metamodel may declare a read-only property of its own; it may not, however, make a property of this document writable that this document declares read-only, nor the reverse, since that would change what a script means rather than extend it.
+- `writable` is *writable after creation*, and defaults to `true` when it is absent, which it is for every property but two. A property declared `"writable": false` is a **read-only** property (section "4.5"): it is initialized at creation like any other and is refused as the target of a `set`, an `update` or a `clear` with `PROPERTY_IS_READ_ONLY`. An implementation dispatches on the flag rather than on the property name, so an extended metamodel may declare a read-only property of its own; it may not, however, make a property of this document writable that this document declares read-only, nor the reverse, since that would change what a script means rather than extend it.
 - `naturalIdentity` is the natural identity property set `I(T)` of section "5.2". An empty set — `entry` — means that the uniqueness invariant is vacuous for that type and that `create` never rejects it as a duplicate. When a multitext belongs to the set, values are compared language by language, and unset qualified values never take part in the comparison.
 - `unnamedArguments` is the ordered list of properties that the unnamed initializer arguments of LiftPatchShort map to, position by position (Part 3, section "6.2.4"). It is necessarily empty on a singleton component type, which has no initializer list at all because it is never created. It is declared explicitly, and is **not** derived from the order in which `properties` happens to be written: the order of the keys of a JSON object is not significant, so a derived rule would make the meaning of `c /mami f("editorial", "To be checked")` depend on a parser's hash table. An empty list means the component type admits no unnamed argument, and any unnamed argument given to it raises `UNNAMED_ARGUMENT_NOT_ALLOWED`; so does an argument beyond the length of the list. Every property listed here is a required property of its type.
 - `pseudoProperties` do not belong to the data: they are selection devices, and their availability per command is given by the applicability tables of section "5.4". `kind` says what sort of device each one is — `identifier` (a persistent id), `lookupKey` (a dictionary-assigned disambiguator), `position` (an ordinal), `key` (a type key, section "5.3.4"), `childPredicate` (a condition on the children of the component) — and is what an implementation dispatches on, rather than on the name. The singleton step of strategy S7 is not listed among the pseudo-properties because it is not one: it is the *absence* of a selector, and it is declared by the `componentKind` of the component type instead. A `childPredicate` is not a datatype-bearing property: `argument` gives what it is written with, a step for `has` and a string for `has-gloss`, and `expandsTo` gives the equivalent general form of the shorthand.
@@ -5002,7 +5018,7 @@ listed in B.4.
 | `UNKNOWN_PRAGMA_ATTRIBUTE` | the version pragma carries an attribute other than `sigil` and `metamodel` | 1.1 |
 | `UNSUPPORTED_METAMODEL` | the pragma requires a metamodel that the implementation has not loaded | 1.1, Appendix A |
 | `PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE` | a property is used on a component type on which Appendix A does not define it | 4.1, 7.1 |
-| `PROPERTY_IS_READ_ONLY` | `set`, `update` or `clear` names a property that Appendix A declares `"writable": false`, such as the `type` of a `trait` | 4.5, 9.3.1 |
+| `PROPERTY_IS_READ_ONLY` | `set`, `update` or `clear` names a property that Appendix A declares `"writable": false`: the `type` of a `trait` or of a `field` | 4.5, 9.3.1 |
 | `ILLEGAL_PARENT` | two component types are stated to be parent and child where Appendix A does not relate them: a component created or moved under such a parent, a `create entry(...)` in a block body, or two adjacent steps of a chain or a path — which is what "skipping a level" amounts to, as in `on example[...] of entry[...]` or `d /e[f="mami"] x[t="…"]` | 3, 7.3, 8.5, 11 |
 | `LANG_KEY_NOT_SUPPORTED_ON_SCALAR` | an `@L` or `@*` qualifier, or a multi-language literal, is written on a scalar property | 4.4, 5.5.1 |
 | `MISSING_LANGUAGE_QUALIFIER` | `clear` is written on a multitext with neither a language code nor `@*` | 9.3.1 |
@@ -6050,7 +6066,48 @@ implementation MAY add cases; it MUST pass these.
     "description": "re-keying a typed component onto a type a sibling already has is a duplicate",
     "dictionary": "standard",
     "script": "create translation(type = \"literal\", text@en = \"precisely\")\n  under example[text@tww = \"a mami jefi\"]\n  of sense[gloss@en = \"pig\"]\n  of entry[form@tww = \"mami\", hn = 1]\nset type = \"literal\"\n  on translation^free\n  of example[text@tww = \"a mami jefi\"]\n  of sense[gloss@en = \"pig\"]\n  of entry[form@tww = \"mami\", hn = 1]",
-    "expect": { "status": "error", "code": "CANNOT_CREATE_DUPLICATE", "kind": "dynamic", "commandIndex": 2 } }
+    "expect": { "status": "error", "code": "CANNOT_CREATE_DUPLICATE", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-088", "section": "4.5", "syntax": "LiftPatchRef",
+    "description": "the type of a field is read-only, like the type of a trait, and is refused before the dictionary is consulted",
+    "dictionary": "standard",
+    "script": "set type = \"review\" on field^editorial of entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "PROPERTY_IS_READ_ONLY", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-089", "section": "4.1", "syntax": "LiftPatchRef",
+    "description": "a variant has a form and no type; its kind is a variant-type trait",
+    "dictionary": "standard",
+    "script": "create variant(form@tww = \"mamii\")\n  under entry[form@tww = \"mami\", hn = 1] {\n  create trait(type = \"variant-type\", value = \"Dialectal Variant\")\n}",
+    "expect": { "status": "ok", "effects": [
+      { "kind": "componentCreated", "componentType": "variant", "position": 1 },
+      { "kind": "propertySet", "property": "form", "language": "tww", "oldValue": null, "newValue": "mamii" },
+      { "kind": "componentCreated", "componentType": "trait", "position": null },
+      { "kind": "propertySet", "property": "type", "language": null, "oldValue": null, "newValue": "variant-type" },
+      { "kind": "propertySet", "property": "value", "language": null, "oldValue": null, "newValue": "Dialectal Variant" } ] } },
+
+  { "id": "C-090", "section": "4.1", "syntax": "LiftPatchRef",
+    "description": "a variant has no type property",
+    "dictionary": "standard",
+    "script": "create variant(type = \"dialectal\", form@tww = \"mamii\")\n  under entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-091", "section": "5.2", "syntax": "LiftPatchRef",
+    "description": "the natural identity of a variant is its form: two variants with the same qualified form under one entry are duplicates",
+    "dictionary": "standard",
+    "script": "create variant(form@tww = \"mamii\") under entry[form@tww = \"mami\", hn = 1]\ncreate variant(form@tww = \"mamii\") under entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "CANNOT_CREATE_DUPLICATE", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-092", "section": "4.1", "syntax": "LiftPatchRef",
+    "description": "a variant has no target property; a link from a variant is a relation",
+    "dictionary": "standard",
+    "script": "create variant(target = entry[form@tww = \"memi\"])\n  under entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-093", "section": "6.1", "syntax": "LiftPatchRef",
+    "description": "the form of a variant is required at creation",
+    "dictionary": "standard",
+    "script": "create variant() under entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "MISSING_REQUIRED_PROPERTY", "kind": "static", "commandIndex": 1 } }
 ]
 ```
 
