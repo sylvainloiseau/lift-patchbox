@@ -6,8 +6,10 @@ import static org.junit.jupiter.api.Assertions.assertNotNull;
 
 import fr.cnrs.lacito.liftpatchbox.ast.Block;
 import fr.cnrs.lacito.liftpatchbox.ast.Command;
+import fr.cnrs.lacito.liftpatchbox.ast.Directive;
 import fr.cnrs.lacito.liftpatchbox.ast.Script;
 import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
+import java.util.List;
 import org.junit.jupiter.api.Test;
 
 /** A first end-to-end check that both grammars parse and both visitors build. */
@@ -21,6 +23,54 @@ class ParserSmokeTest {
 
     private Script concise(String text) {
         return parser.parse(text, Syntax.CONCISE, "<test>");
+    }
+
+    private static final String DIRECTIVES = """
+        language-delete object = "tpi"
+        feature-set-create "variant-type"
+        feature-set-delete "variant-type"
+        feature-set-rename "variant-type" to "variant-kind"
+        feature-create "Dialectal Variant" in "variant-type"
+        feature-delete "Dialectal Variant" in "variant-type"
+        feature-rename "Dialectal" in "variant-type" to "Dialectal Variant"
+        field-create "literal-meaning" model = multistring
+        trait-create "semantic-domain" model = option-collection range = "semantic-domain"
+        field-delete "editorial"
+        trait-delete "cv-pattern"
+        """;
+
+    @Test
+    void parsesEveryDirectiveInBothSyntaxes() {
+        for (Script s : List.of(ref(DIRECTIVES), concise(DIRECTIVES))) {
+            List<Directive> ds = s.items().stream().map(Directive.class::cast).toList();
+            assertEquals(11, ds.size());
+            assertInstanceOf(Directive.LanguageDelete.class, ds.get(0));
+            Directive.FeatureRename rename = assertInstanceOf(Directive.FeatureRename.class, ds.get(6));
+            assertEquals("Dialectal", rename.name());
+            assertEquals("variant-type", rename.featureSet());
+            assertEquals("Dialectal Variant", rename.newName());
+            assertEquals("feature-rename \"Dialectal\" in \"variant-type\" to \"Dialectal Variant\"",
+                rename.toString());
+            Directive.DefinitionCreate trait =
+                assertInstanceOf(Directive.DefinitionCreate.class, ds.get(8));
+            assertEquals(Directive.DefinitionKind.TRAIT, trait.kind());
+            assertEquals("option-collection", trait.model());
+            assertEquals("semantic-domain", trait.range());
+            Directive.DefinitionDelete field = assertInstanceOf(Directive.DefinitionDelete.class, ds.get(9));
+            assertEquals(Directive.DefinitionKind.FIELD, field.kind());
+            assertEquals("trait-delete", ds.get(10).keyword());
+        }
+    }
+
+    @Test
+    void theDirectiveKeywordsRemainNamesOutsideADirective() {
+        // `to` is Tongan, and `in`, `model`, `range` are ordinary words elsewhere.
+        assertInstanceOf(Command.Create.class, ref(
+            "create note(type = \"in\", text@to = \"x\") under entry[form@tww = \"mami\"] as $range")
+            .items().get(0));
+        assertInstanceOf(Command.Set.class, ref(
+            "set text@en = \"x\" on note^model of entry[form@tww = \"memi\"]").items().get(0));
+        assertInstanceOf(Command.Create.class, concise("c /model/range x(\"in\")").items().get(0));
     }
 
     @Test

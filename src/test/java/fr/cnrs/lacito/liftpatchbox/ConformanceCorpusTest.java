@@ -165,7 +165,8 @@ class ConformanceCorpusTest {
             out.add(e.kind() + "|" + n(e.componentType()) + "|" + n(e.property()) + "|"
                 + n(e.language()) + "|" + n(e.languageKind()) + "|" + n(e.oldValue()) + "|"
                 + n(e.newValue()) + "|" + n(e.position()) + "|" + n(e.fromPosition()) + "|"
-                + n(e.toPosition()));
+                + n(e.toPosition()) + "|" + n(e.declarationType()) + "|" + n(e.name()) + "|"
+                + n(e.featureSet()) + "|" + n(e.newName()));
         }
         return out;
     }
@@ -186,7 +187,11 @@ class ConformanceCorpusTest {
                 boxed(e, "position"),
                 boxed(e, "fromPosition"),
                 boxed(e, "toPosition"),
-                null, null));
+                null, null,
+                Json.string(e, "declarationType"),
+                Json.string(e, "name"),
+                Json.string(e, "featureSet"),
+                Json.string(e, "newName")));
         }
         return out;
     }

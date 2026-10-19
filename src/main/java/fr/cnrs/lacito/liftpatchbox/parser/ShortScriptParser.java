@@ -288,10 +288,21 @@ public final class ShortScriptParser {
         LiftPatchShortParser p = parserFor(line.body(), line.lineNumber(), line.bodyColumn());
         LiftPatchShortParser.DirectiveOnlyContext ctx = p.directiveOnly();
         checkErrors(p);
-        boolean create = ctx.LANGUAGE_CREATE() != null;
-        LanguageKind kind =
-            ctx.langKind().OBJECT() != null ? LanguageKind.OBJECT : LanguageKind.META;
-        return new Directive(create, kind, string(ctx.string()), line.position());
+        if (ctx.languageDirective() != null) {
+            LiftPatchShortParser.LanguageDirectiveContext l = ctx.languageDirective();
+            LanguageKind kind =
+                l.langKind().OBJECT() != null ? LanguageKind.OBJECT : LanguageKind.META;
+            return DirectiveBuilder.build(l.getStart().getText(), kind,
+                List.of(string(l.string())), null, false, line.position());
+        }
+        LiftPatchShortParser.DeclarationContext d = ctx.declaration();
+        List<String> strings = new ArrayList<>();
+        for (LiftPatchShortParser.StringContext sc : d.string()) {
+            strings.add(string(sc));
+        }
+        return DirectiveBuilder.build(d.getStart().getText(), null, strings,
+            d.dataModel() == null ? null : d.dataModel().getText(), d.RANGE() != null,
+            line.position());
     }
 
     private Object buildCommand(ShortLinePreprocessor.Recognized line) {

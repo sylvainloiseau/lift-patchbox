@@ -76,4 +76,26 @@ public final class LanguageScope {
         }
         return model.firstLanguage(kind);
     }
+
+    /**
+     * Whether a scope still open binds {@code language} as the default of its kind.
+     *
+     * <p>Every open scope counts, not only the innermost: an outer binding comes back
+     * into force when the inner scope ends. {@code language-delete} refuses such a
+     * language (Part 1, section 2.1.3), so that the default of section 2.1 never names
+     * a language the dictionary no longer has. The fallback - the first language of
+     * the kind - is not a binding, and simply moves on to the next one.</p>
+     *
+     * @param kind     the language kind
+     * @param language the language code
+     * @return {@code true} when a binding in an open scope names it
+     */
+    public boolean isBound(LanguageKind kind, String language) {
+        for (Map<LanguageKind, String> frame : frames) {
+            if (language.equals(frame.get(kind))) {
+                return true;
+            }
+        }
+        return false;
+    }
 }

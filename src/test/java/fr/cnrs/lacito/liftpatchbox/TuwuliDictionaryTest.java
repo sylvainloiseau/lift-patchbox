@@ -7,6 +7,7 @@ import static org.junit.jupiter.api.Assertions.assertThrows;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import fr.cnrs.lacito.liftapi.LiftDictionary;
+import fr.cnrs.lacito.liftapi.model.Feature;
 import fr.cnrs.lacito.liftapi.model.Form;
 import fr.cnrs.lacito.liftapi.model.LiftEntry;
 import fr.cnrs.lacito.liftapi.model.LiftSense;
@@ -131,6 +132,32 @@ class TuwuliDictionaryTest {
             assertTrue(plan.isOk(), () -> String.valueOf(plan.error()));
             assertEquals(2, plan.summary().componentsCreated());
             assertEquals(before, shared.getLiftDictionaryRegistry().getEntries().size());
+        }
+
+        @Test
+        @DisplayName("refuses to delete the object language the entries are written in")
+        void refusesToDeleteALanguageInUse() {
+            Plan plan = box().plan(shared, "language-delete object = \"tww\"",
+                Syntax.REFERENCE, "<tww>");
+            assertFalse(plan.isOk());
+            assertEquals(ErrorCode.LANGUAGE_IN_USE, plan.error().code());
+            assertTrue(shared.getObjectLanguageManager().hasLanguage("tww"));
+        }
+
+        @Test
+        @DisplayName("renaming a real part of speech reports one effect, whatever uses it")
+        void renamingAPartOfSpeechReportsOneEffect() {
+            Feature pos = shared.getLiftDictionaryRegistry().getGrammaticalInfos().stream()
+                .map(g -> g.getGramInfoValue()).filter(f -> f != null)
+                .findFirst().orElseThrow();
+            String id = pos.getId();
+            Plan plan = box().plan(shared,
+                "feature-rename \"" + id + "\" in \"grammatical-info\" to \"liftpatchbox-test\"",
+                Syntax.REFERENCE, "<tww>");
+            assertTrue(plan.isOk(), () -> String.valueOf(plan.error()));
+            assertEquals(1, plan.allEffects().size());
+            assertEquals(1, plan.summary().declarationsRenamed());
+            assertEquals(id, pos.getId(), "plan mode leaves the dictionary as it was");
         }
 
         @Test

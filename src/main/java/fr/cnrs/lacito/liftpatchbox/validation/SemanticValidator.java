@@ -24,6 +24,7 @@ import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCollector;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
 import fr.cnrs.lacito.liftpatchbox.metamodel.ComponentTypeDef;
+import fr.cnrs.lacito.liftpatchbox.metamodel.DataModel;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Datatype;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
 import fr.cnrs.lacito.liftpatchbox.metamodel.PropertyDef;
@@ -120,9 +121,81 @@ public final class SemanticValidator {
                     if (d.isOperation()) {
                         operationIndex++;
                     }
+                    validateDeclaredNames(d);
+                    if (d instanceof Directive.DefinitionCreate create) {
+                        validateDefinitionCreate(create);
+                    }
                 }
                 case Block b -> validateBlock(b, ctx);
             }
+        }
+    }
+
+    /**
+     * A name a declaration directive declares, renames to, or refers to cannot be
+     * blank (Part 1, section 2.1.4): it is the id the dictionary stores it under.
+     */
+    private void validateDeclaredNames(Directive d) {
+        List<String> names = switch (d) {
+            case Directive.FeatureSetCreate x -> List.of(x.name());
+            case Directive.FeatureSetDelete x -> List.of(x.name());
+            case Directive.FeatureSetRename x -> List.of(x.name(), x.newName());
+            case Directive.FeatureCreate x -> List.of(x.name(), x.featureSet());
+            case Directive.FeatureDelete x -> List.of(x.name(), x.featureSet());
+            case Directive.FeatureRename x -> List.of(x.name(), x.featureSet(), x.newName());
+            case Directive.DefinitionCreate x ->
+                x.range() == null ? List.of(x.name()) : List.of(x.name(), x.range());
+            case Directive.DefinitionDelete x -> List.of(x.name());
+            case Directive.LanguageDefault x -> List.of();
+            case Directive.LanguageCreate x -> List.of();
+            case Directive.LanguageDelete x -> List.of();
+        };
+        if (names.stream().anyMatch(String::isBlank)) {
+            error(ErrorCode.SYNTAX_ERROR,
+                "the name of a feature set, a feature or a definition cannot be blank",
+                d.position());
+        }
+    }
+
+    /**
+     * The data model of a {@code field-create} or a {@code trait-create}, and its
+     * {@code range} (Part 1, section 2.1.5). Both are known from the script alone, so
+     * they are static errors.
+     */
+    private void validateDefinitionCreate(Directive.DefinitionCreate create) {
+        boolean field = create.kind() == Directive.DefinitionKind.FIELD;
+        DataModel model;
+        if (create.model() == null) {
+            model = field ? DataModel.MULTITEXT : DataModel.STRING;
+        } else {
+            Optional<DataModel> named = DataModel.named(create.model());
+            if (named.isEmpty()) {
+                error(ErrorCode.ILLEGAL_DATA_MODEL,
+                    "`" + create.model() + "` is not a data model; a " + create.kind().jsonName()
+                        + " takes " + (field ? "`multitext` or `multistring`"
+                            : "`string`, `integer`, `datetime`, `option`, `option-collection` "
+                                + "or `option-sequence`"),
+                    create.position());
+                return;
+            }
+            model = named.get();
+            if (field ? !model.forFields() : !model.forTraits()) {
+                error(ErrorCode.ILLEGAL_DATA_MODEL,
+                    "the data model `" + model.jsonName() + "` is not one of a "
+                        + create.kind().jsonName(),
+                    create.position());
+                return;
+            }
+        }
+        if (model.needsRange() && create.range() == null) {
+            error(ErrorCode.ILLEGAL_RANGE,
+                "the data model `" + model.jsonName() + "` takes its values from a feature set, "
+                    + "which `range = \"...\"` names",
+                create.position());
+        } else if (!model.needsRange() && create.range() != null) {
+            error(ErrorCode.ILLEGAL_RANGE,
+                "only an `option`, `option-collection` or `option-sequence` model takes a `range`",
+                create.position());
         }
     }
 

@@ -19,6 +19,7 @@ import fr.cnrs.lacito.liftapi.model.LiftEtymology;
 import fr.cnrs.lacito.liftapi.model.LiftExample;
 import fr.cnrs.lacito.liftapi.model.LiftField;
 import fr.cnrs.lacito.liftapi.model.LiftFieldAndTraitDefinition;
+import fr.cnrs.lacito.liftapi.model.LiftHeader;
 import fr.cnrs.lacito.liftapi.model.LiftIllustration;
 import fr.cnrs.lacito.liftapi.model.LiftMedia;
 import fr.cnrs.lacito.liftapi.model.LiftNote;
@@ -183,6 +184,260 @@ public final class LiftModel {
         LiftDictionaryLanguagesManager manager = languages(kind);
         manager.addLanguage(code);
         journal.record(() -> manager.removeLanguage(code));
+    }
+
+    /**
+     * The number of languages of a kind.
+     *
+     * @param kind the language kind
+     * @return the size of that kind's list
+     */
+    public int languageCount(LanguageKind kind) {
+        return languages(kind).getLanguages().size();
+    }
+
+    /**
+     * Whether a text of the dictionary is written in a language, a text of the header
+     * (a feature label...) included.
+     *
+     * @param kind the language kind
+     * @param code the language code
+     * @return {@code true} when the language has at least one occurrence
+     */
+    public boolean languageInUse(LanguageKind kind, String code) {
+        return languages(kind).getLanguageOccurrence(code) != 0;
+    }
+
+    /**
+     * Remove a language from the dictionary, recording its restoration in the journal.
+     *
+     * @param kind the language kind
+     * @param code the language code, which no text uses
+     */
+    public void deleteLanguage(LanguageKind kind, String code) {
+        LiftDictionaryLanguagesManager manager = languages(kind);
+        manager.removeLanguage(code);
+        journal.record(() -> manager.addLanguage(code));
+    }
+
+    // ===================================================================
+    // Declarations: feature sets, features, field and trait definitions
+    // ===================================================================
+
+    /**
+     * The feature sets every dictionary has, and that a script can neither delete nor
+     * rename (Part 1, section 2.1.4). The dictionary model refuses them too, but has
+     * no query for them.
+     */
+    private static final Set<String> BUILT_IN_FEATURE_SETS = Set.of(
+        "grammatical-info", "note-type", "translation-type", "lexical-relation",
+        "reversal-type", "annotation-type", "etymology");
+
+    private LiftHeader header() {
+        return dictionary.getHeader();
+    }
+
+    /**
+     * Whether the header declares a feature set.
+     *
+     * @param id the id of the feature set
+     * @return {@code true} when it exists
+     */
+    public boolean hasFeatureSet(String id) {
+        return header().hasFeatureSet(id);
+    }
+
+    /**
+     * Whether a feature set is one of the seven every dictionary has.
+     *
+     * @param id the id of the feature set
+     * @return {@code true} for a built-in feature set
+     */
+    public boolean isBuiltInFeatureSet(String id) {
+        return BUILT_IN_FEATURE_SETS.contains(id);
+    }
+
+    /**
+     * Whether a feature set is defined in an external ranges file that was not loaded
+     * with the dictionary: such a set cannot be renamed.
+     *
+     * @param id the id of an existing feature set
+     * @return {@code true} when its content lives in a file that was not read
+     */
+    public boolean isExternalUnloaded(String id) {
+        FeatureSet fs = header().getFeatureSet(id);
+        return fs.getHref().isPresent() && !fs.isExternalContentLoaded();
+    }
+
+    /**
+     * Declare a feature set, recording its removal in the journal.
+     *
+     * @param id the id of the new feature set
+     */
+    public void createFeatureSet(String id) {
+        FeatureSet fs = header().addFeatureSet(id);
+        journal.record(() -> header().removeFeatureSet(fs));
+    }
+
+    /**
+     * Remove a feature set with its features, recording its restoration.
+     *
+     * <p>Whether the set is in use is the dictionary model's question: a definition
+     * taking it as its range, or one of its features used outside the set. What the
+     * set holds itself goes with it.</p>
+     *
+     * @param id the id of the feature set
+     * @throws IllegalStateException if the set is in use; nothing has changed then
+     */
+    public void deleteFeatureSet(String id) {
+        FeatureSet fs = header().getFeatureSet(id);
+        header().removeFeatureSet(fs);
+        journal.record(() -> header().addFeatureSet(fs));
+    }
+
+    /**
+     * Rename a feature set, recording the rename back. What refers to the set holds
+     * the object, and follows.
+     *
+     * @param id    the current id
+     * @param newId the new id
+     */
+    public void renameFeatureSet(String id, String newId) {
+        FeatureSet fs = header().getFeatureSet(id);
+        header().renameFeatureSet(fs, newId);
+        journal.record(() -> header().renameFeatureSet(fs, id));
+    }
+
+    /**
+     * Whether a feature set holds a feature.
+     *
+     * @param featureSet the id of an existing feature set
+     * @param id         the id of the feature
+     * @return {@code true} when it exists
+     */
+    public boolean hasFeature(String featureSet, String id) {
+        return header().getFeatureSet(featureSet).hasFeature(id);
+    }
+
+    /**
+     * Whether something in the dictionary uses a feature (see
+     * {@code LiftHeader.isUsed(Feature)}).
+     *
+     * @param featureSet the id of the feature set
+     * @param id         the id of the feature
+     * @return {@code true} when the feature is in use
+     */
+    public boolean featureInUse(String featureSet, String id) {
+        return header().isUsed(header().getFeatureSet(featureSet).getFeature(id));
+    }
+
+    /**
+     * Declare a feature in a feature set, recording its removal.
+     *
+     * @param featureSet the id of the feature set
+     * @param id         the id of the new feature
+     */
+    public void createFeature(String featureSet, String id) {
+        FeatureSet fs = header().getFeatureSet(featureSet);
+        Feature f = fs.addFeature(id);
+        // The id at undo time: a rename recorded after this one is undone first.
+        journal.record(() -> fs.removeFeature(f.getId()));
+    }
+
+    /**
+     * Remove a feature, recording its restoration: the same object comes back, so
+     * that what held it before the removal - restored by the journal too - still
+     * finds it.
+     *
+     * @param featureSet the id of the feature set
+     * @param id         the id of a feature no component uses
+     */
+    public void deleteFeature(String featureSet, String id) {
+        FeatureSet fs = header().getFeatureSet(featureSet);
+        Feature f = fs.removeFeature(id);
+        journal.record(() -> fs.addFeature(f));
+    }
+
+    /**
+     * Rename a feature, recording the rename back. Every component typed by the
+     * feature, every category and every trait value holding it now reads the new id:
+     * they hold the {@code Feature} object, which compares by identity.
+     *
+     * @param featureSet the id of the feature set
+     * @param id         the current id of the feature
+     * @param newId      its new id
+     */
+    public void renameFeature(String featureSet, String id, String newId) {
+        FeatureSet fs = header().getFeatureSet(featureSet);
+        Feature f = fs.getFeature(id);
+        fs.changeFeatureId(f, newId);
+        journal.record(() -> fs.changeFeatureId(f, id));
+    }
+
+    /**
+     * Whether the header declares a field or trait definition under a name, of
+     * either kind: the two share one namespace.
+     *
+     * @param name the name of the definition
+     * @return {@code true} when one exists
+     */
+    public boolean hasDefinition(String name) {
+        return header().containsFieldsAndTraitsDefinitions(name);
+    }
+
+    /**
+     * Whether the definition under a name can be the one a {@code field-delete} (or a
+     * {@code trait-delete}) names: one of that kind, or one whose kind the file left
+     * undeclared.
+     *
+     * @param name  the name of an existing definition
+     * @param field {@code true} for a field, {@code false} for a trait
+     * @return {@code false} when it is a definition of the other kind
+     */
+    public boolean definitionIsOfKind(String name, boolean field) {
+        LiftFieldAndTraitDefinition fd = header().getFieldsAndTraitsDefinitions(name);
+        return field ? !fd.isTraitDefinition() : !fd.isFieldDefinition();
+    }
+
+    /**
+     * Whether a field or a trait uses a definition, in an entry or in the header.
+     *
+     * @param name the name of an existing definition
+     * @return {@code true} when it is in use
+     */
+    public boolean definitionInUse(String name) {
+        return header().isUsed(header().getFieldsAndTraitsDefinitions(name));
+    }
+
+    /**
+     * Declare a field or trait definition, recording its removal.
+     *
+     * @param field {@code true} for a field, {@code false} for a trait
+     * @param name  the name of the new definition
+     * @param model the data model as LIFT names it; already checked against the kind
+     * @param range the id of the feature set of an option model, or {@code null}
+     */
+    public void createDefinition(boolean field, String name, String model, String range) {
+        LiftFieldAndTraitDefinition fd = field
+            ? header().createFieldDefinition(name)
+            : header().createTraitDefinition(name);
+        fd.setDataModel(Optional.of(model));
+        if (range != null) {
+            fd.setResolvedRange(Optional.of(header().getFeatureSet(range)));
+        }
+        journal.record(() -> header().removeFieldOrTraitDefinition(fd));
+    }
+
+    /**
+     * Remove a field or trait definition no field or trait uses, recording its
+     * restoration.
+     *
+     * @param name the name of the definition
+     */
+    public void deleteDefinition(String name) {
+        LiftFieldAndTraitDefinition fd = header().getFieldsAndTraitsDefinitions(name);
+        header().removeFieldOrTraitDefinition(fd);
+        journal.record(() -> header().addFieldOrTraitDefinition(fd));
     }
 
     // ===================================================================

@@ -216,25 +216,206 @@ public final class Executor {
     }
 
     private void executeDirective(Directive directive) {
-        if (!directive.create()) {
-            resolver.requireLanguage(directive.kind(), directive.language(), directive.position());
-            languages.bind(directive.kind(), directive.language());
+        if (directive instanceof Directive.LanguageDefault d) {
+            resolver.requireLanguage(d.kind(), d.language(), d.position());
+            languages.bind(d.kind(), d.language());
             return;
         }
         int index = ++operationIndex;
         resolver.setOperationIndex(index);
-        if (model.hasLanguage(directive.kind(), directive.language())) {
-            throw resolver.error(ErrorCode.LANGUAGE_ALREADY_EXISTS,
-                "the dictionary already has the " + directive.kind().jsonName() + " language `"
-                    + directive.language() + "`",
-                directive.position());
-        }
-        model.createLanguage(directive.kind(), directive.language());
-        languages.bind(directive.kind(), directive.language());
-        Effect effect = Effect.languageCreated(directive.kind().jsonName(), directive.language());
+        Effect effect = switch (directive) {
+            case Directive.LanguageDefault d -> throw new IllegalStateException("handled above");
+            case Directive.LanguageCreate d -> languageCreate(d);
+            case Directive.LanguageDelete d -> languageDelete(d);
+            case Directive.FeatureSetCreate d -> featureSetCreate(d);
+            case Directive.FeatureSetDelete d -> featureSetDelete(d);
+            case Directive.FeatureSetRename d -> featureSetRename(d);
+            case Directive.FeatureCreate d -> featureCreate(d);
+            case Directive.FeatureDelete d -> featureDelete(d);
+            case Directive.FeatureRename d -> featureRename(d);
+            case Directive.DefinitionCreate d -> definitionCreate(d);
+            case Directive.DefinitionDelete d -> definitionDelete(d);
+        };
         summary.count(effect);
         operations.add(new Operation(index, directive.position(), directive.toString(),
-            "language-create", null, null, null, List.of(effect), null, null));
+            directive.keyword(), null, null, null, List.of(effect), null, null));
+    }
+
+    // ------------------------------------------------------------ languages
+
+    private Effect languageCreate(Directive.LanguageCreate d) {
+        if (model.hasLanguage(d.kind(), d.language())) {
+            throw resolver.error(ErrorCode.LANGUAGE_ALREADY_EXISTS,
+                "the dictionary already has the " + d.kind().jsonName() + " language `"
+                    + d.language() + "`",
+                d.position());
+        }
+        model.createLanguage(d.kind(), d.language());
+        languages.bind(d.kind(), d.language());
+        return Effect.languageCreated(d.kind().jsonName(), d.language());
+    }
+
+    private Effect languageDelete(Directive.LanguageDelete d) {
+        String kind = d.kind().jsonName();
+        if (!model.hasLanguage(d.kind(), d.language())) {
+            throw resolver.error(d.kind().noSuchLanguageError(),
+                "the dictionary has no " + kind + " language `" + d.language() + "`",
+                d.position());
+        }
+        if (model.languageCount(d.kind()) == 1) {
+            throw resolver.error(ErrorCode.CANNOT_DELETE_LAST_LANGUAGE,
+                "`" + d.language() + "` is the only " + kind + " language of the dictionary, "
+                    + "whose list of " + kind + " languages cannot be empty",
+                d.position());
+        }
+        if (model.languageInUse(d.kind(), d.language())) {
+            throw resolver.error(ErrorCode.LANGUAGE_IN_USE,
+                "texts of the dictionary are written in the " + kind + " language `"
+                    + d.language() + "`",
+                d.position());
+        }
+        if (languages.isBound(d.kind(), d.language())) {
+            throw resolver.error(ErrorCode.LANGUAGE_IN_USE,
+                "`" + d.language() + "` is the default " + kind + " language bound in scope",
+                d.position());
+        }
+        model.deleteLanguage(d.kind(), d.language());
+        return Effect.languageDeleted(kind, d.language());
+    }
+
+    // ------------------------------------------------------------ feature sets
+
+    private Effect featureSetCreate(Directive.FeatureSetCreate d) {
+        if (model.hasFeatureSet(d.name())) {
+            throw alreadyDeclared("feature set", d.name(), d.position());
+        }
+        model.createFeatureSet(d.name());
+        return Effect.declarationCreated("feature-set", d.name(), null);
+    }
+
+    private Effect featureSetDelete(Directive.FeatureSetDelete d) {
+        requireFeatureSet(d.name(), d.position());
+        requireNotBuiltIn(d.name(), "deleted", d.position());
+        try {
+            model.deleteFeatureSet(d.name());
+        } catch (IllegalStateException e) {
+            // The one refusal left to the dictionary model, whose removal is
+            // all-or-nothing: what the set holds itself does not count as a use, a
+            // question only the model answers (Part 1, section 2.1.4).
+            throw resolver.error(ErrorCode.DECLARATION_IN_USE,
+                "the feature set `" + d.name() + "` is in use: " + e.getMessage(),
+                d.position());
+        }
+        return Effect.declarationDeleted("feature-set", d.name(), null);
+    }
+
+    private Effect featureSetRename(Directive.FeatureSetRename d) {
+        requireFeatureSet(d.name(), d.position());
+        requireNotBuiltIn(d.name(), "renamed", d.position());
+        if (model.hasFeatureSet(d.newName())) {
+            throw alreadyDeclared("feature set", d.newName(), d.position());
+        }
+        if (model.isExternalUnloaded(d.name())) {
+            throw resolver.error(ErrorCode.DECLARATION_IS_EXTERNAL,
+                "the feature set `" + d.name() + "` is defined in an external ranges file that "
+                    + "was not loaded; that file would go on naming it `" + d.name() + "`",
+                d.position());
+        }
+        model.renameFeatureSet(d.name(), d.newName());
+        return Effect.declarationRenamed("feature-set", d.name(), null, d.newName());
+    }
+
+    // ------------------------------------------------------------ features
+
+    private Effect featureCreate(Directive.FeatureCreate d) {
+        requireFeatureSet(d.featureSet(), d.position());
+        if (model.hasFeature(d.featureSet(), d.name())) {
+            throw alreadyDeclared("feature", d.name() + "` in `" + d.featureSet(), d.position());
+        }
+        model.createFeature(d.featureSet(), d.name());
+        return Effect.declarationCreated("feature", d.name(), d.featureSet());
+    }
+
+    private Effect featureDelete(Directive.FeatureDelete d) {
+        requireFeature(d.featureSet(), d.name(), d.position());
+        if (model.featureInUse(d.featureSet(), d.name())) {
+            throw resolver.error(ErrorCode.DECLARATION_IN_USE,
+                "the feature `" + d.name() + "` of `" + d.featureSet() + "` is in use",
+                d.position());
+        }
+        model.deleteFeature(d.featureSet(), d.name());
+        return Effect.declarationDeleted("feature", d.name(), d.featureSet());
+    }
+
+    private Effect featureRename(Directive.FeatureRename d) {
+        requireFeature(d.featureSet(), d.name(), d.position());
+        if (model.hasFeature(d.featureSet(), d.newName())) {
+            throw alreadyDeclared("feature", d.newName() + "` in `" + d.featureSet(), d.position());
+        }
+        model.renameFeature(d.featureSet(), d.name(), d.newName());
+        return Effect.declarationRenamed("feature", d.name(), d.featureSet(), d.newName());
+    }
+
+    // ------------------------------------------------------------ definitions
+
+    private Effect definitionCreate(Directive.DefinitionCreate d) {
+        boolean field = d.kind() == Directive.DefinitionKind.FIELD;
+        if (model.hasDefinition(d.name())) {
+            throw alreadyDeclared("field or trait definition", d.name(), d.position());
+        }
+        if (d.range() != null) {
+            requireFeatureSet(d.range(), d.position());
+        }
+        String dataModel = d.model() != null ? d.model() : field ? "multitext" : "string";
+        model.createDefinition(field, d.name(), dataModel, d.range());
+        return Effect.declarationCreated(d.kind().jsonName(), d.name(), null);
+    }
+
+    private Effect definitionDelete(Directive.DefinitionDelete d) {
+        boolean field = d.kind() == Directive.DefinitionKind.FIELD;
+        if (!model.hasDefinition(d.name()) || !model.definitionIsOfKind(d.name(), field)) {
+            throw resolver.error(ErrorCode.NO_SUCH_DECLARATION,
+                "the dictionary declares no " + d.kind().jsonName() + " `" + d.name() + "`",
+                d.position());
+        }
+        if (model.definitionInUse(d.name())) {
+            throw resolver.error(ErrorCode.DECLARATION_IN_USE,
+                "the " + d.kind().jsonName() + " definition `" + d.name()
+                    + "` is used by a " + d.kind().jsonName() + " of the dictionary",
+                d.position());
+        }
+        model.deleteDefinition(d.name());
+        return Effect.declarationDeleted(d.kind().jsonName(), d.name(), null);
+    }
+
+    // ------------------------------------------------------------ shared checks
+
+    private void requireFeatureSet(String id, SourcePosition position) {
+        if (!model.hasFeatureSet(id)) {
+            throw resolver.error(ErrorCode.NO_SUCH_DECLARATION,
+                "the dictionary declares no feature set `" + id + "`", position);
+        }
+    }
+
+    private void requireFeature(String featureSet, String id, SourcePosition position) {
+        requireFeatureSet(featureSet, position);
+        if (!model.hasFeature(featureSet, id)) {
+            throw resolver.error(ErrorCode.NO_SUCH_DECLARATION,
+                "the feature set `" + featureSet + "` has no feature `" + id + "`", position);
+        }
+    }
+
+    private void requireNotBuiltIn(String id, String done, SourcePosition position) {
+        if (model.isBuiltInFeatureSet(id)) {
+            throw resolver.error(ErrorCode.DECLARATION_IS_BUILT_IN,
+                "`" + id + "` is a built-in feature set, which cannot be " + done,
+                position);
+        }
+    }
+
+    private LiftPatchException alreadyDeclared(String what, String name, SourcePosition position) {
+        return resolver.error(ErrorCode.DECLARATION_ALREADY_EXISTS,
+            "the dictionary already declares the " + what + " `" + name + "`", position);
     }
 
     // ===================================================================

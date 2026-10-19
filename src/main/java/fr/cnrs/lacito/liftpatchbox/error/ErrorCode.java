@@ -109,6 +109,10 @@ public enum ErrorCode {
     CANNOT_CLEAR_REQUIRED_PROPERTY(ErrorKind.STATIC),
     /** The script does not parse, or uses a construct the grammar forbids in that position. */
     SYNTAX_ERROR(ErrorKind.STATIC),
+    /** A {@code field-create} or {@code trait-create} names an unknown data model, or one of the other kind. */
+    ILLEGAL_DATA_MODEL(ErrorKind.STATIC),
+    /** A {@code range} is missing with an option data model, or given with another one. */
+    ILLEGAL_RANGE(ErrorKind.STATIC),
 
     // --------------------------------------------------------------- dynamic
 
@@ -135,7 +139,21 @@ public enum ErrorCode {
     /** A meta language code is not in the dictionary's meta language list. */
     NO_SUCH_META_LANGUAGE(ErrorKind.DYNAMIC),
     /** {@code language-create} names a language the dictionary already has. */
-    LANGUAGE_ALREADY_EXISTS(ErrorKind.DYNAMIC);
+    LANGUAGE_ALREADY_EXISTS(ErrorKind.DYNAMIC),
+    /** {@code language-delete} names the only language of its kind. */
+    CANNOT_DELETE_LAST_LANGUAGE(ErrorKind.DYNAMIC),
+    /** {@code language-delete} names a language a text is written in, or the default bound in scope. */
+    LANGUAGE_IN_USE(ErrorKind.DYNAMIC),
+    /** A declaration directive creates, or renames onto, a name that is already declared. */
+    DECLARATION_ALREADY_EXISTS(ErrorKind.DYNAMIC),
+    /** A declaration directive names a feature set, a feature or a definition that does not exist. */
+    NO_SUCH_DECLARATION(ErrorKind.DYNAMIC),
+    /** A feature set, a feature or a definition still in use would be deleted. */
+    DECLARATION_IN_USE(ErrorKind.DYNAMIC),
+    /** A built-in feature set would be deleted or renamed. */
+    DECLARATION_IS_BUILT_IN(ErrorKind.DYNAMIC),
+    /** A feature set defined in an external ranges file that was not loaded would be renamed. */
+    DECLARATION_IS_EXTERNAL(ErrorKind.DYNAMIC);
 
     private final ErrorKind kind;
 

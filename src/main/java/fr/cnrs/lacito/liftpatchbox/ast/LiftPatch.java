@@ -221,7 +221,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive languageDefault(LanguageKind kind, String language) {
-        return new Directive(false, kind, language, SourcePosition.UNKNOWN);
+        return new Directive.LanguageDefault(kind, language, SourcePosition.UNKNOWN);
     }
 
     /**
@@ -232,7 +232,130 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive languageCreate(LanguageKind kind, String language) {
-        return new Directive(true, kind, language, SourcePosition.UNKNOWN);
+        return new Directive.LanguageCreate(kind, language, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code language-delete} directive.
+     *
+     * @param kind     the language kind
+     * @param language the language code
+     * @return the directive, at an unknown position
+     */
+    public static Directive languageDelete(LanguageKind kind, String language) {
+        return new Directive.LanguageDelete(kind, language, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code feature-set-create} directive.
+     *
+     * @param name the id of the new feature set
+     * @return the directive, at an unknown position
+     */
+    public static Directive featureSetCreate(String name) {
+        return new Directive.FeatureSetCreate(name, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code feature-set-delete} directive.
+     *
+     * @param name the id of the feature set
+     * @return the directive, at an unknown position
+     */
+    public static Directive featureSetDelete(String name) {
+        return new Directive.FeatureSetDelete(name, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code feature-set-rename} directive.
+     *
+     * @param name    the current id of the feature set
+     * @param newName its new id
+     * @return the directive, at an unknown position
+     */
+    public static Directive featureSetRename(String name, String newName) {
+        return new Directive.FeatureSetRename(name, newName, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code feature-create} directive.
+     *
+     * @param name       the id of the new feature
+     * @param featureSet the feature set it is created in
+     * @return the directive, at an unknown position
+     */
+    public static Directive featureCreate(String name, String featureSet) {
+        return new Directive.FeatureCreate(name, featureSet, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code feature-delete} directive.
+     *
+     * @param name       the id of the feature
+     * @param featureSet the feature set it belongs to
+     * @return the directive, at an unknown position
+     */
+    public static Directive featureDelete(String name, String featureSet) {
+        return new Directive.FeatureDelete(name, featureSet, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code feature-rename} directive.
+     *
+     * @param name       the current id of the feature
+     * @param featureSet the feature set it belongs to
+     * @param newName    its new id
+     * @return the directive, at an unknown position
+     */
+    public static Directive featureRename(String name, String featureSet, String newName) {
+        return new Directive.FeatureRename(name, featureSet, newName, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code field-create} directive.
+     *
+     * @param name  the name of the new definition
+     * @param model the data model, or {@code null} for {@code multitext}
+     * @return the directive, at an unknown position
+     */
+    public static Directive fieldCreate(String name, String model) {
+        return new Directive.DefinitionCreate(
+            Directive.DefinitionKind.FIELD, name, model, null, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code trait-create} directive.
+     *
+     * @param name  the name of the new definition
+     * @param model the data model, or {@code null} for {@code string}
+     * @param range the feature set of an option model, or {@code null}
+     * @return the directive, at an unknown position
+     */
+    public static Directive traitCreate(String name, String model, String range) {
+        return new Directive.DefinitionCreate(
+            Directive.DefinitionKind.TRAIT, name, model, range, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code field-delete} directive.
+     *
+     * @param name the name of the definition
+     * @return the directive, at an unknown position
+     */
+    public static Directive fieldDelete(String name) {
+        return new Directive.DefinitionDelete(
+            Directive.DefinitionKind.FIELD, name, SourcePosition.UNKNOWN);
+    }
+
+    /**
+     * A {@code trait-delete} directive.
+     *
+     * @param name the name of the definition
+     * @return the directive, at an unknown position
+     */
+    public static Directive traitDelete(String name) {
+        return new Directive.DefinitionDelete(
+            Directive.DefinitionKind.TRAIT, name, SourcePosition.UNKNOWN);
     }
 
     // ===================================================================

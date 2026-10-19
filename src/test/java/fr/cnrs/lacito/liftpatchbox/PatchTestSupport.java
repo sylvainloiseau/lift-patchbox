@@ -142,7 +142,17 @@ public abstract class PatchTestSupport {
                 + e.oldValue() + "->" + e.newValue();
             case propertyRemoved -> "removed:" + qualified(e) + "=" + e.oldValue();
             case languageCreated -> "language:" + e.languageKind() + ":" + e.language();
+            case languageDeleted -> "language-deleted:" + e.languageKind() + ":" + e.language();
+            case declarationCreated -> "declared:" + declaration(e);
+            case declarationDeleted -> "undeclared:" + declaration(e);
+            case declarationRenamed -> "renamed:" + declaration(e) + "->" + e.newName();
         }).toList();
+    }
+
+    /** A declared name, prefixed by its type, and by its feature set for a feature. */
+    private static String declaration(Effect e) {
+        return e.declarationType() + ":"
+            + (e.featureSet() == null ? "" : e.featureSet() + "/") + e.name();
     }
 
     private static String qualified(Effect e) {

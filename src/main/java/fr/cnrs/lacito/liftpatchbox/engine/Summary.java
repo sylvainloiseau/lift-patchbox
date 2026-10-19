@@ -8,7 +8,7 @@ import java.util.TreeMap;
 /**
  * What a script did, counted.
  *
- * <p>The six totals are the ones a plan document carries (Part 2, section
+ * <p>The ten totals are the ones a plan document carries (Part 2, section
  * 12.4.1). The two breakdowns — components created per component type, and
  * operations per verb — are this implementation's own, and are what the
  * command-line tool prints after a run so that a lexicographer sees at a glance
@@ -22,6 +22,10 @@ public final class Summary {
     private int propertiesSet;
     private int propertiesRemoved;
     private int languagesCreated;
+    private int languagesDeleted;
+    private int declarationsCreated;
+    private int declarationsDeleted;
+    private int declarationsRenamed;
 
     private final Map<String, Integer> createdByType = new TreeMap<>();
     private final Map<String, Integer> deletedByType = new TreeMap<>();
@@ -46,6 +50,10 @@ public final class Summary {
             case propertySet, propertyReplaced -> propertiesSet++;
             case propertyRemoved -> propertiesRemoved++;
             case languageCreated -> languagesCreated++;
+            case languageDeleted -> languagesDeleted++;
+            case declarationCreated -> declarationsCreated++;
+            case declarationDeleted -> declarationsDeleted++;
+            case declarationRenamed -> declarationsRenamed++;
         }
     }
 
@@ -112,6 +120,42 @@ public final class Summary {
      */
     public int languagesCreated() {
         return languagesCreated;
+    }
+
+    /**
+     * The total of the {@code languageDeleted} effects.
+     *
+     * @return how many languages the script removed from the dictionary
+     */
+    public int languagesDeleted() {
+        return languagesDeleted;
+    }
+
+    /**
+     * The total of the {@code declarationCreated} effects.
+     *
+     * @return how many feature sets, features and definitions the script declared
+     */
+    public int declarationsCreated() {
+        return declarationsCreated;
+    }
+
+    /**
+     * The total of the {@code declarationDeleted} effects.
+     *
+     * @return how many feature sets, features and definitions the script removed
+     */
+    public int declarationsDeleted() {
+        return declarationsDeleted;
+    }
+
+    /**
+     * The total of the {@code declarationRenamed} effects.
+     *
+     * @return how many feature sets and features the script renamed
+     */
+    public int declarationsRenamed() {
+        return declarationsRenamed;
     }
 
     /**

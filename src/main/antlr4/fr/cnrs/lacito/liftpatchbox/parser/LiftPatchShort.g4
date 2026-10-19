@@ -73,8 +73,8 @@ propertyListOnly: LPAREN propertyRef (COMMA propertyRef)* RPAREN EOF ;
 /** The trailing clauses of a command line: `to`, `at` and `as`. */
 tailOnly        : (TO path)? atClause? labelBinding? EOF ;
 
-/** A `language-default` or `language-create` directive line. */
-directiveOnly   : (LANGUAGE_DEFAULT | LANGUAGE_CREATE) langKind EQUALS string EOF ;
+/** A directive line: a language directive or a declaration, written as in the reference syntax. */
+directiveOnly   : (languageDirective | declaration) EOF ;
 
 /** A version pragma line. */
 pragmaOnly      : PCT_LIFTPATCH version pragmaAttribute* EOF ;
@@ -87,6 +87,19 @@ version         : INT DOT INT ;
 pragmaAttribute : anyName EQUALS string ;
 
 langKind        : OBJECT | META ;
+
+languageDirective
+                : (LANGUAGE_DEFAULT | LANGUAGE_CREATE | LANGUAGE_DELETE) langKind EQUALS string ;
+declaration     : FEATURE_SET_CREATE string
+                | FEATURE_SET_DELETE string
+                | FEATURE_SET_RENAME string TO string
+                | FEATURE_CREATE string IN string
+                | FEATURE_DELETE string IN string
+                | FEATURE_RENAME string IN string TO string
+                | (FIELD_CREATE | TRAIT_CREATE) string (MODEL EQUALS dataModel)? (RANGE EQUALS string)?
+                | (FIELD_DELETE | TRAIT_DELETE) string
+                ;
+dataModel       : bareWord ;
 
 path            : SLASH pathStep (axis pathStep)*        # absolutePath
                 | labelRef (axis pathStep)*              # labelPath
@@ -166,6 +179,11 @@ bareWord        : BARE_WORD
                 | AT | AS | TO
                 | BEGINNING | END | INDEX | BEFORE | AFTER
                 | OBJECT | META
+                | IN | MODEL | RANGE
+                | LANGUAGE_DEFAULT | LANGUAGE_CREATE | LANGUAGE_DELETE
+                | FEATURE_SET_CREATE | FEATURE_SET_DELETE | FEATURE_SET_RENAME
+                | FEATURE_CREATE | FEATURE_DELETE | FEATURE_RENAME
+                | FIELD_CREATE | FIELD_DELETE | TRAIT_CREATE | TRAIT_DELETE
                 | INT
                 ;
 
@@ -179,6 +197,18 @@ PCT_LIFTPATCH   : '%liftpatch' ;
 
 LANGUAGE_DEFAULT: 'language-default' ;
 LANGUAGE_CREATE : 'language-create' ;
+LANGUAGE_DELETE : 'language-delete' ;
+
+FEATURE_SET_CREATE : 'feature-set-create' ;
+FEATURE_SET_DELETE : 'feature-set-delete' ;
+FEATURE_SET_RENAME : 'feature-set-rename' ;
+FEATURE_CREATE  : 'feature-create' ;
+FEATURE_DELETE  : 'feature-delete' ;
+FEATURE_RENAME  : 'feature-rename' ;
+FIELD_CREATE    : 'field-create' ;
+FIELD_DELETE    : 'field-delete' ;
+TRAIT_CREATE    : 'trait-create' ;
+TRAIT_DELETE    : 'trait-delete' ;
 
 HAS             : 'has' ;
 EXISTS          : 'exists' ;
@@ -187,6 +217,9 @@ ABSENT          : 'absent' ;
 AT              : 'at' ;
 AS              : 'as' ;
 TO              : 'to' ;
+IN              : 'in' ;
+MODEL           : 'model' ;
+RANGE           : 'range' ;
 
 BEGINNING       : 'beginning' ;
 END             : 'end' ;

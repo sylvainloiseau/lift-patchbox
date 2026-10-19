@@ -61,8 +61,26 @@ pragma          : PCT_LIFTPATCH version pragmaAttribute* ;
 version         : INT DOT INT ;
 pragmaAttribute : anyName EQUALS string ;
 
-directive       : (LANGUAGE_DEFAULT | LANGUAGE_CREATE) langKind EQUALS string ;
+directive       : languageDirective
+                | declaration
+                ;
+languageDirective
+                : (LANGUAGE_DEFAULT | LANGUAGE_CREATE | LANGUAGE_DELETE) langKind EQUALS string ;
 langKind        : OBJECT | META ;
+
+// The declaration directives of Part 1, sections 2.1.4 and 2.1.5. A `range` given to a
+// field, or a data model that does not suit the kind, is a static error
+// (ILLEGAL_RANGE, ILLEGAL_DATA_MODEL), checked by the validator.
+declaration     : FEATURE_SET_CREATE string
+                | FEATURE_SET_DELETE string
+                | FEATURE_SET_RENAME string TO string
+                | FEATURE_CREATE string IN string
+                | FEATURE_DELETE string IN string
+                | FEATURE_RENAME string IN string TO string
+                | (FIELD_CREATE | TRAIT_CREATE) string (MODEL EQUALS dataModel)? (RANGE EQUALS string)?
+                | (FIELD_DELETE | TRAIT_DELETE) string
+                ;
+dataModel       : anyName ;
 
 block           : blockHeader LBRACE item* RBRACE ;
 blockHeader     : createCmd
@@ -157,6 +175,11 @@ anyName         : NAME
                 | HAS | EXISTS | ABSENT
                 | BEGINNING | END | INDEX | BEFORE | AFTER
                 | OBJECT | META
+                | IN | TO | MODEL | RANGE
+                | LANGUAGE_DEFAULT | LANGUAGE_CREATE | LANGUAGE_DELETE
+                | FEATURE_SET_CREATE | FEATURE_SET_DELETE | FEATURE_SET_RENAME
+                | FEATURE_CREATE | FEATURE_DELETE | FEATURE_RENAME
+                | FIELD_CREATE | FIELD_DELETE | TRAIT_CREATE | TRAIT_DELETE
                 ;
 
 // =====================================================================
@@ -167,6 +190,18 @@ PCT_LIFTPATCH   : '%liftpatch' ;
 
 LANGUAGE_DEFAULT: 'language-default' ;
 LANGUAGE_CREATE : 'language-create' ;
+LANGUAGE_DELETE : 'language-delete' ;
+
+FEATURE_SET_CREATE : 'feature-set-create' ;
+FEATURE_SET_DELETE : 'feature-set-delete' ;
+FEATURE_SET_RENAME : 'feature-set-rename' ;
+FEATURE_CREATE  : 'feature-create' ;
+FEATURE_DELETE  : 'feature-delete' ;
+FEATURE_RENAME  : 'feature-rename' ;
+FIELD_CREATE    : 'field-create' ;
+FIELD_DELETE    : 'field-delete' ;
+TRAIT_CREATE    : 'trait-create' ;
+TRAIT_DELETE    : 'trait-delete' ;
 
 CREATE          : 'create' ;
 UPSERT          : 'upsert' ;
@@ -199,6 +234,13 @@ AFTER           : 'after' ;
 
 OBJECT          : 'object' ;
 META            : 'meta' ;
+
+// Keywords of the declaration directives only; anywhere else they are names
+// (`form@to`, `$range`), which is why anyName lists them.
+IN              : 'in' ;
+TO              : 'to' ;
+MODEL           : 'model' ;
+RANGE           : 'range' ;
 
 LBRACE          : '{' ;
 RBRACE          : '}' ;

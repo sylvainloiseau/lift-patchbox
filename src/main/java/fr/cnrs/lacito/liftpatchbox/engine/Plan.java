@@ -181,6 +181,10 @@ public record Plan(
             .append(", \"propertiesSet\": ").append(summary.propertiesSet())
             .append(", \"propertiesRemoved\": ").append(summary.propertiesRemoved())
             .append(", \"languagesCreated\": ").append(summary.languagesCreated())
+            .append(", \"languagesDeleted\": ").append(summary.languagesDeleted())
+            .append(", \"declarationsCreated\": ").append(summary.declarationsCreated())
+            .append(", \"declarationsDeleted\": ").append(summary.declarationsDeleted())
+            .append(", \"declarationsRenamed\": ").append(summary.declarationsRenamed())
             .append(" }\n}");
         return sb.toString();
     }
@@ -235,7 +239,14 @@ public record Plan(
             if (e.languageKind() != null) {
                 sb.append(", \"languageKind\": ").append(quote(e.languageKind()));
             }
-            if (e.kind() != Effect.Kind.componentCreated
+            if (e.isDeclaration()) {
+                sb.append(", \"declarationType\": ").append(quote(e.declarationType()));
+                sb.append(", \"name\": ").append(quote(e.name()));
+                sb.append(", \"featureSet\": ").append(quote(e.featureSet()));
+                if (e.kind() == Effect.Kind.declarationRenamed) {
+                    sb.append(", \"newName\": ").append(quote(e.newName()));
+                }
+            } else if (e.kind() != Effect.Kind.componentCreated
                 && e.kind() != Effect.Kind.componentDeleted
                 && e.kind() != Effect.Kind.componentMoved) {
                 sb.append(", \"language\": ").append(quote(e.language()));

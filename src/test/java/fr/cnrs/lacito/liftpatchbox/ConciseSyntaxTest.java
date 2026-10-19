@@ -45,6 +45,35 @@ class ConciseSyntaxTest extends PatchTestSupport {
         }
 
         @Test
+        @DisplayName("a declaration directive is recognized by its keyword and a quoted name")
+        void recognizesADeclarationDirective() {
+            assertEffects(
+                applyConcise("""
+                    feature-create is how a feature is declared, but this line is prose
+                    feature-set-create "variant-type"
+                    feature-create "Dialectal Variant" in "variant-type"
+                    trait-create "variant-type" model = option range = "variant-type"
+                    """),
+                "declared:feature-set:variant-type",
+                "declared:feature:variant-type/Dialectal Variant",
+                "declared:trait:variant-type");
+        }
+
+        @Test
+        @DisplayName("a declaration directive may be indented under a command, and outlives it")
+        void anIndentedDeclarationIsNotScoped() {
+            assertEffects(
+                applyConcise("""
+                    c /memi n("general", "checked")
+                      feature-create "draft" in "note-type"
+                    c /memi n("draft", "to check")
+                    """),
+                "created:note@null", "set:type=general", "set:text@en=checked",
+                "declared:feature:note-type/draft",
+                "created:note@null", "set:type=draft", "set:text@en=to check");
+        }
+
+        @Test
         @DisplayName("a line beginning with a backslash is never a command")
         void aBackslashEscapesALine() {
             Plan plan = applyConcise("\\c /memi/puppy\n");

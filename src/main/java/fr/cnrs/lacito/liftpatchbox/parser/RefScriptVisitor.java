@@ -120,9 +120,20 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
 
     @Override
     public Directive visitDirective(LiftPatchRefParser.DirectiveContext ctx) {
-        boolean create = ctx.LANGUAGE_CREATE() != null;
-        LanguageKind kind = ctx.langKind().OBJECT() != null ? LanguageKind.OBJECT : LanguageKind.META;
-        return new Directive(create, kind, string(ctx.string()), position(ctx));
+        if (ctx.languageDirective() != null) {
+            LiftPatchRefParser.LanguageDirectiveContext l = ctx.languageDirective();
+            LanguageKind kind = l.langKind().OBJECT() != null ? LanguageKind.OBJECT : LanguageKind.META;
+            return DirectiveBuilder.build(l.getStart().getText(), kind,
+                List.of(string(l.string())), null, false, position(ctx));
+        }
+        LiftPatchRefParser.DeclarationContext d = ctx.declaration();
+        List<String> strings = new ArrayList<>();
+        for (LiftPatchRefParser.StringContext sc : d.string()) {
+            strings.add(string(sc));
+        }
+        return DirectiveBuilder.build(d.getStart().getText(), null, strings,
+            d.dataModel() == null ? null : d.dataModel().getText(), d.RANGE() != null,
+            position(ctx));
     }
 
     // ===================================================================

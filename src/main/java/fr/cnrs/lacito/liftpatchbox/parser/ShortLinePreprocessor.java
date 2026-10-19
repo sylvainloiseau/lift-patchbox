@@ -318,11 +318,35 @@ public final class ShortLinePreprocessor {
             indent, lineNumber, j + k + 1, group, line.strip());
     }
 
+    /** The language directives, followed by {@code object} or {@code meta}. */
+    private static final String[] LANGUAGE_DIRECTIVES =
+        {"language-default ", "language-create ", "language-delete "};
+
+    /** The declaration directives, followed by a quoted name. */
+    private static final String[] DECLARATION_DIRECTIVES = {
+        "feature-set-create ", "feature-set-delete ", "feature-set-rename ",
+        "feature-create ", "feature-delete ", "feature-rename ",
+        "field-create ", "field-delete ", "trait-create ", "trait-delete "
+    };
+
+    /**
+     * Rule 2 of Part 3, section 1.1: a directive keyword followed by what can only
+     * begin a directive - a language kind, or a quoted name - so that a prose line
+     * beginning with one of these words is not taken for a directive.
+     */
     private static boolean isDirective(String rest) {
-        for (String prefix : new String[] {"language-default ", "language-create "}) {
+        for (String prefix : LANGUAGE_DIRECTIVES) {
             if (rest.startsWith(prefix)) {
                 String tail = rest.substring(prefix.length()).stripLeading();
                 if (tail.startsWith("object") || tail.startsWith("meta")) {
+                    return true;
+                }
+            }
+        }
+        for (String prefix : DECLARATION_DIRECTIVES) {
+            if (rest.startsWith(prefix)) {
+                String tail = rest.substring(prefix.length()).stripLeading();
+                if (tail.startsWith("\"") || tail.startsWith("'")) {
                     return true;
                 }
             }

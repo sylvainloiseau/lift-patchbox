@@ -2,12 +2,21 @@ package fr.cnrs.lacito.liftpatchbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertFalse;
+import static org.junit.jupiter.api.Assertions.assertSame;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
+import fr.cnrs.lacito.liftapi.LiftDictionary;
+import fr.cnrs.lacito.liftapi.model.Feature;
+import fr.cnrs.lacito.liftapi.model.FeatureSet;
 import fr.cnrs.lacito.liftapi.model.LiftAnnotation;
+import fr.cnrs.lacito.liftapi.model.LiftEntry;
+import fr.cnrs.lacito.liftapi.model.LiftFieldAndTraitDefinition;
+import fr.cnrs.lacito.liftapi.model.LiftHeader;
+import fr.cnrs.lacito.liftapi.model.LiftTrait;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import java.util.List;
+import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -340,6 +349,194 @@ class ConstructsTest extends PatchTestSupport {
             assertEquals(List.of("synonym", "antonym"),
                 entries("tww", "mami").get(0).getVariants().get(0).getRelations().stream()
                     .map(r -> r.getType().getId()).toList());
+        }
+    }
+
+    @Nested
+    @DisplayName("declaration directives")
+    class Declarations {
+
+        private LiftHeader header() {
+            return dictionary.getHeader();
+        }
+
+        @Test
+        @DisplayName("declare a feature set and a feature, and rename the feature")
+        void declareAndRename() {
+            assertEffects(
+                apply("""
+                    feature-set-create "variant-type"
+                    feature-create "Free" in "variant-type"
+                    feature-rename "Free" in "variant-type" to "Free Variant"
+                    """),
+                "declared:feature-set:variant-type",
+                "declared:feature:variant-type/Free",
+                "renamed:feature:variant-type/Free->Free Variant");
+            assertTrue(header().getFeatureSet("variant-type").hasFeature("Free Variant"));
+        }
+
+        @Test
+        @DisplayName("delete a language no text uses and no scope binds")
+        void deleteALanguage() {
+            assertEffects(
+                apply("""
+                    language-create meta = "de"
+                    language-default meta = "en"
+                    language-delete meta = "de"
+                    """),
+                "language:meta:de", "language-deleted:meta:de");
+            assertFalse(dictionary.getMetaLanguageManager().hasLanguage("de"));
+        }
+
+        @Test
+        @DisplayName("refuse to delete a language in use, bound in scope, or the last of its kind")
+        void refuseToDeleteALanguage() {
+            refused(ErrorCode.LANGUAGE_IN_USE, "language-delete object = \"tpi\"");
+            refused(ErrorCode.LANGUAGE_IN_USE, """
+                language-create object = "hui"
+                language-delete object = "hui"
+                """);
+            refused(ErrorCode.NO_SUCH_OBJECT_LANGUAGE, "language-delete object = \"xyz\"");
+            dictionary = LiftDictionary.makeBuilder()
+                .withMetaLanguages("en").withObjectLanguages("tww").build();
+            refused(ErrorCode.CANNOT_DELETE_LAST_LANGUAGE, "language-delete meta = \"en\"");
+        }
+
+        @Test
+        @DisplayName("refuse what the header does not allow, each with its code")
+        void refuseEachCondition() {
+            refused(ErrorCode.NO_SUCH_DECLARATION, "feature-create \"x\" in \"nothing\"");
+            refused(ErrorCode.NO_SUCH_DECLARATION, "feature-delete \"x\" in \"grammatical-info\"");
+            refused(ErrorCode.DECLARATION_ALREADY_EXISTS,
+                "feature-create \"Noun\" in \"grammatical-info\"");
+            refused(ErrorCode.DECLARATION_ALREADY_EXISTS, "feature-set-create \"note-type\"");
+            refused(ErrorCode.DECLARATION_IS_BUILT_IN,
+                "feature-set-rename \"grammatical-info\" to \"pos\"");
+            refused(ErrorCode.DECLARATION_IS_BUILT_IN, "feature-set-delete \"note-type\"");
+            refused(ErrorCode.DECLARATION_IN_USE, "feature-delete \"Noun\" in \"grammatical-info\"");
+            refused(ErrorCode.SYNTAX_ERROR, "feature-create \"\" in \"grammatical-info\"");
+        }
+
+        @Test
+        @DisplayName("are rolled back with the rest of a failing script")
+        void areRolledBack() {
+            Feature noun = header().getGrammaticalInfoManager().getFeature("Noun");
+            header().getGrammaticalInfoManager().addFeature("Adverb");
+            Feature adverb = header().getGrammaticalInfoManager().getFeature("Adverb");
+            refused(ErrorCode.CANNOT_CREATE_DUPLICATE, """
+                feature-set-create "variant-type"
+                feature-delete "Adverb" in "grammatical-info"
+                feature-rename "Noun" in "grammatical-info" to "N"
+                create sense(gloss@en = "dog") under entry[form@tww = "memi"]
+                """);
+            assertFalse(header().hasFeatureSet("variant-type"));
+            // The same objects are back, so what held them still finds them.
+            assertSame(adverb, header().getGrammaticalInfoManager().getFeature("Adverb"));
+            assertSame(noun, header().getGrammaticalInfoManager().getFeature("Noun"));
+        }
+
+        @Test
+        @DisplayName("are not scoped: one written in a block outlives it")
+        void outliveTheirBlock() {
+            apply("""
+                entry[form@tww = "memi"] {
+                  feature-set-create "variant-type"
+                  create note(type = "general", text@en = "checked")
+                }
+                """);
+            assertTrue(header().hasFeatureSet("variant-type"));
+        }
+
+        @Test
+        @DisplayName("a renamed type is selected by its new name afterwards")
+        void aRenamedTypeIsSelectedByItsNewName() {
+            apply("create note(type = \"general\", text@en = \"first\") "
+                + "under entry[form@tww = \"memi\"]");
+            assertEffects(
+                apply("""
+                    feature-rename "general" in "note-type" to "editorial"
+                    set text@en = "checked" on note^editorial of entry[form@tww = "memi"]
+                    """),
+                "renamed:feature:note-type/general->editorial",
+                "replaced:text@en:first->checked");
+        }
+
+        @Test
+        @DisplayName("renaming a part of speech relabels every category that has it")
+        void renamingAPartOfSpeechRelabelsTheCategories() {
+            apply("feature-rename \"Noun\" in \"grammatical-info\" to \"N\"");
+            LiftEntry mami = entries("tww", "mami").get(0);
+            assertEquals(Optional.of("N"), category(senses(mami, "en", "pig").get(0)));
+            assertEquals(Optional.of("N"), category(senses(mami, "en", "pork").get(0)));
+        }
+
+        @Test
+        @DisplayName("a set from an external ranges file that was not read cannot be renamed")
+        void anUnreadExternalSetCannotBeRenamed() {
+            header().addFeatureSet("dialects").setHref("dialects.lift-ranges");
+            refused(ErrorCode.DECLARATION_IS_EXTERNAL,
+                "feature-set-rename \"dialects\" to \"regions\"");
+            assertTrue(header().hasFeatureSet("dialects"));
+        }
+
+        @Test
+        @DisplayName("a set whose only uses are its own hierarchy is deleted with it")
+        void aSetGoesWithItsOwnHierarchy() {
+            FeatureSet usage = header().addFeatureSet("usage");
+            usage.addFeature("archaic").setSuperordinateFeature(usage.addFeature("old"));
+            assertEffects(apply("feature-set-delete \"usage\""),
+                "undeclared:feature-set:usage");
+            assertFalse(header().hasFeatureSet("usage"));
+        }
+
+        @Test
+        @DisplayName("a feature used only by a trait of the header cannot be deleted")
+        void aFeatureUsedInTheHeaderCannotBeDeleted() {
+            FeatureSet usage = header().addFeatureSet("usage");
+            Feature archaic = usage.addFeature("archaic");
+            LiftFieldAndTraitDefinition register = header().createTraitDefinition("register");
+            register.setDataModel(Optional.of("option"));
+            register.setResolvedRange(Optional.of(usage));
+            header().getGrammaticalInfoManager().getFeature("Noun")
+                .addTrait(new LiftTrait(register, archaic));
+            refused(ErrorCode.DECLARATION_IN_USE, "feature-delete \"archaic\" in \"usage\"");
+            refused(ErrorCode.DECLARATION_IN_USE, "trait-delete \"register\"");
+        }
+
+        @Test
+        @DisplayName("declare an option trait with its range, and a field with its data model")
+        void declareDefinitions() {
+            assertEffects(
+                apply("""
+                    feature-set-create "variant-type"
+                    trait-create "variant-type" model = option range = "variant-type"
+                    field-create "literal-meaning" model = multistring
+                    """),
+                "declared:feature-set:variant-type",
+                "declared:trait:variant-type",
+                "declared:field:literal-meaning");
+            LiftFieldAndTraitDefinition trait = header().getFieldsAndTraitsDefinitions("variant-type");
+            assertTrue(trait.isTraitDefinition());
+            assertEquals("option", trait.getDeclaredTypeStr().orElseThrow());
+            assertSame(header().getFeatureSet("variant-type"), trait.getResolvedFeatureSet().orElseThrow());
+            assertEquals("multistring",
+                header().getFieldsAndTraitsDefinitions("literal-meaning").getDeclaredTypeStr().orElseThrow());
+        }
+
+        @Test
+        @DisplayName("refuse a definition in use, of the other kind, or with an illegal model")
+        void refuseDefinitions() {
+            apply("create field(type = \"editorial\", text@en = \"to check\") "
+                + "under entry[form@tww = \"memi\"]");
+            refused(ErrorCode.DECLARATION_IN_USE, "field-delete \"editorial\"");
+            refused(ErrorCode.NO_SUCH_DECLARATION, "trait-delete \"editorial\"");
+            refused(ErrorCode.DECLARATION_ALREADY_EXISTS, "trait-create \"editorial\"");
+            refused(ErrorCode.NO_SUCH_DECLARATION,
+                "trait-create \"t\" model = option range = \"nothing\"");
+            refused(ErrorCode.ILLEGAL_DATA_MODEL, "trait-create \"t\" model = multitext");
+            refused(ErrorCode.ILLEGAL_DATA_MODEL, "field-create \"f\" model = colour");
+            refused(ErrorCode.ILLEGAL_RANGE, "trait-create \"t\" model = option-sequence");
+            refused(ErrorCode.ILLEGAL_RANGE, "field-create \"f\" range = \"note-type\"");
         }
     }
 

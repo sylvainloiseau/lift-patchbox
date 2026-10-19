@@ -87,7 +87,7 @@ LiftPatch reference commands are contained in a script file, "Lift patch referen
 
 - commands that start on their own line with one of the eight verbs (set, upsert, update, clear, delete, ensure, create, move).
 - *block headers*, together with their opening `{` and their closing `}` line (see section "11").
-- scope directives: `language-default`, `language-create`, and the `with` block (see section "2.1").
+- directives: the language directives `language-default`, `language-create` and `language-delete`, the `with` block (see section "2.1"), and the declaration directives that manage the feature sets, the features and the field and trait definitions of the dictionary (sections "2.1.4" and "2.1.5").
 - the optional version pragma `%liftpatch 1.0` (see section "1.1").
 - comments. A comment starts with an unquoted `#` and runs to the end of the physical line. A comment may occupy a whole line, or follow a command on the same line (*inline comment*). A `#` occurring inside a quoted string is an ordinary character, not a comment marker.
 
@@ -100,7 +100,7 @@ The LiftPatchShort commands are expressed on a single line. It can be mixed with
 LiftPatchShort commands are:
 
 - lines starting with optional whitespace followed by one of the single-letter command abbreviations, followed by whitespace and by a second token of a constrained shape. The recognition rule is normative and is given in Part 3, section "1.1"; a one-letter prefix alone is deliberately *not* sufficient, so that ordinary prose beginning with "c " or "s " is not mistaken for a command.
-- special instructions `language-default` and `language-create` 
+- the directives of Part 1, sections "2.1.1" and "2.1.3" to "2.1.5", written exactly as in the reference syntax: `language-default`, `language-create`, `language-delete` and the declaration directives.
 - the optional version pragma `%liftpatch 1.0`, anywhere before the first command line of the document (section "1.1"). A pragma declaring a `sigil` is the one exception: it must be the first non-blank line.
 
 In both syntaxes, strings are quoted by single or double quotes. The escaping
@@ -244,7 +244,7 @@ with object = "tww", meta = "en" {
 - A `with` block is a scope, and, like every block, also a transaction boundary (section "11"): it takes part in the atomicity of the enclosing block or script, and a failure inside its body rolls the body back and then fails the enclosing scope.
 - The language code named by a `with` binding must exist in the corresponding dictionary language list; otherwise `NO_SUCH_META_LANGUAGE` or `NO_SUCH_OBJECT_LANGUAGE` is raised.
 
-### 2.1.3 Creating new languages
+### 2.1.3 Creating and deleting languages
 
 The `language-create` directive creates a new language in the dictionary. It takes `object` or `meta` as a subcommand and the language code as its value. `LANGUAGE_ALREADY_EXISTS` is raised if the language already exists in the dictionary. Examples:
 
@@ -258,11 +258,137 @@ K, with the same scope rules as a `language-default K` directive placed at the
 same position. It can be overridden afterwards by a `language-default` directive
 or by a `with` block.
 
-Two further points, because `language-create` is the one directive that changes
-the dictionary rather than only the state of the script:
+The `language-delete` directive removes a language from the dictionary, and is
+written like `language-create`:
 
-- the language it adds is added to the dictionary's language list, not to a scope: it remains after the end of the enclosing block, and after the end of the script;
-- it is nevertheless part of the script's transaction (section "12.2"). If any later command fails, the whole script is rolled back and the language is **not** created: "the dictionary is left exactly as it was before the script started" covers its language lists as well as its components.
+```text
+language-delete object = "tpi"
+```
+
+It is refused, and changes nothing, when:
+
+- the language is not in the dictionary's list of that kind: `NO_SUCH_OBJECT_LANGUAGE` or `NO_SUCH_META_LANGUAGE`, as for `language-default`;
+- it is the only language of its kind, since neither list can be empty (section "2"): `CANNOT_DELETE_LAST_LANGUAGE`;
+- a text of the dictionary is written in it — the form of an entry, a gloss, but also the label of a feature or of a definition in the header —, or it is the default language bound by a `language-default`, a `language-create` or a `with` header in a scope still open at that point: `LANGUAGE_IN_USE`.
+
+A language bound in scope counts as used, so that a deletion never leaves the
+default of section "2.1" naming a language the dictionary no longer has. The
+fallback default — the first language of the kind — is not a binding: deleting that
+language makes the next one the fallback. To delete a language in use, remove or
+rewrite the texts written in it first.
+
+**The directives that change the dictionary.** `language-create`,
+`language-delete` and the declaration directives of sections "2.1.4" and "2.1.5"
+change the dictionary rather than only the state of the script. For all of them:
+
+- what they add or remove is added to or removed from the dictionary, not a scope: it remains after the end of the enclosing block, and after the end of the script. They may be written in a block body, like `language-default` (section "11");
+- they are checked against the dictionary as the preceding commands of the script left it (section "12.1"), and the errors they raise for what the dictionary holds are dynamic;
+- each of them is an operation, with one effect in plan mode (section "12.4.1");
+- they are nevertheless part of the script's transaction (section "12.2"). If any later command fails, the whole script is rolled back and nothing they did remains: "the dictionary is left exactly as it was before the script started" covers its language lists and its declarations as well as its components.
+
+### 2.1.4 Managing dictionary feature and feature sets
+
+A dictionary declares, in its header, **feature sets**: closed lists of values,
+each value being a **feature**. LIFT calls a feature set a *range* and a feature a
+*range element*. The parts of speech are a feature set, `grammatical-info`, whose
+features are `Noun`, `Verb`…; the `type` of a note, a relation, an annotation, an
+etymology, a reversal or a translation is a feature too; and the value of an option
+trait is one or several features of the feature set its definition names (section
+"2.1.5").
+
+Seven feature sets are **built in**: every dictionary has them, and they hold the
+types of the components and the parts of speech.
+
+| Feature set | Its features are |
+|---|---|
+| `grammatical-info` | the `value` of a `category` |
+| `note-type` | the `type` of a `note` |
+| `translation-type` | the `type` of a `translation` |
+| `lexical-relation` | the `type` of a `relation` |
+| `reversal-type` | the `type` of a `reversal` |
+| `annotation-type` | the `type` of an `annotation` |
+| `etymology` | the `type` of an `etymology` |
+
+Six directives manage the feature sets and their features. Names are quoted
+strings, since feature ids routinely contain spaces (`"Dialectal Variant"`,
+`"1.5 Plant"`); `in` names the feature set of a feature, and `to` the new name:
+
+```LiftPatchRef
+feature-set-create "variant-type"
+feature-create "Free Variant" in "variant-type"
+feature-create "Dialectal" in "variant-type"
+feature-rename "Dialectal" in "variant-type" to "Dialectal Variant"
+feature-delete "Free Variant" in "variant-type"
+feature-set-rename "variant-type" to "variant-kind"
+feature-set-delete "variant-kind"
+```
+
+- `feature-set-create "s"` declares an empty feature set. `DECLARATION_ALREADY_EXISTS` if `s` exists.
+- `feature-set-delete "s"` removes the feature set with its features. `NO_SUCH_DECLARATION` if `s` does not exist; `DECLARATION_IS_BUILT_IN` for a built-in feature set; `DECLARATION_IN_USE` if a trait definition takes `s` as its `range`, or if one of its features is in use (below). What the feature set holds itself — the hierarchy of its features, the traits of its features — goes with it and does not count as a use.
+- `feature-set-rename "s" to "t"` changes the id of a feature set. `NO_SUCH_DECLARATION`; `DECLARATION_IS_BUILT_IN`; `DECLARATION_ALREADY_EXISTS` if `t` exists; and `DECLARATION_IS_EXTERNAL` if `s` is defined in an external ranges file (a `.lift-ranges` file the dictionary refers to) that was not read with the dictionary: that file is not rewritten when the dictionary is saved, and would go on naming the set `s`. The definitions taking `s` as their `range` follow the rename.
+- `feature-create "f" in "s"` adds a feature to a feature set. `NO_SUCH_DECLARATION` if `s` does not exist; `DECLARATION_ALREADY_EXISTS` if `s` has a feature `f`.
+- `feature-delete "f" in "s"` removes a feature. `NO_SUCH_DECLARATION` if `s` or `f` does not exist. `DECLARATION_IN_USE` while anything uses the feature: the `type` of a note, a relation, an annotation, an etymology, a reversal or a translation; the `value` of a category; the value of an option trait; or being the superordinate of another feature, in a feature set's hierarchy. Uses held by the header count as well as those of the entries: a trait on a feature, for instance.
+- `feature-rename "f" in "s" to "g"` changes the id of a feature. `NO_SUCH_DECLARATION` if `s` or `f` does not exist; `DECLARATION_ALREADY_EXISTS` if `s` has a feature `g`.
+
+A name is never blank: `feature-create "" in "s"` is a `SYNTAX_ERROR`, as is a
+blank name in any directive of this section and of section "2.1.5".
+
+**Renaming is a relabelling of the whole dictionary.** Every component whose `type`
+is the renamed feature, every category whose `value` it is, and every trait value
+holding it read the new name afterwards, and a later selector uses it:
+
+```LiftPatchRef
+feature-rename "general" in "note-type" to "editorial"
+set text@en = "checked" on note^editorial of entry[form@tww = "mami", hn = 1]
+```
+
+The rename reports one effect, not one per component that now reads the new name,
+by the rule that the effect list describes what the script did (section "12.4.1").
+
+**Commands still declare features.** A command naming a type or a part of speech
+that is not declared declares it: `create note(type = "draft", text@en = "…")` adds
+`draft` to `note-type`. These directives add the explicit management of the header;
+they do not make declaring a feature before using it mandatory.
+
+### 2.1.5 Declaring fields and traits
+
+A `field` or a `trait` (section "3") is typed by a **definition** the header
+declares under its `type`, and the definition gives the *data model* of its values.
+A command creating a field or a trait whose type is not declared declares it, with
+the default data model of its kind; to choose the data model, declare the
+definition first:
+
+```LiftPatchRef
+field-create "editorial"
+field-create "literal-meaning" model = multistring
+trait-create "cv-pattern"
+feature-set-create "variant-type"
+trait-create "variant-type" model = option range = "variant-type"
+field-delete "editorial"
+trait-delete "cv-pattern"
+```
+
+The data model is one of LIFT's, written as a bare word:
+
+| Data model | Kind | Value | `range` |
+|---|---|---|---|
+| `multitext` (default for a field) | field | a text in several languages | forbidden |
+| `multistring` | field | a plain string in several languages | forbidden |
+| `string` (default for a trait) | trait | a string | forbidden |
+| `integer` | trait | an integer | forbidden |
+| `datetime` | trait | a date and time | forbidden |
+| `option` | trait | one feature of the range | required |
+| `option-collection` | trait | a set of features of the range | required |
+| `option-sequence` | trait | a sequence of features of the range | required |
+
+- `field-create "n" [model = M]` and `trait-create "n" [model = M] [range = "s"]` declare a definition. Fields and traits share one namespace in the header: `DECLARATION_ALREADY_EXISTS` if any definition is named `n`. `range` names the feature set the values of an option trait are taken from: `NO_SUCH_DECLARATION` if it does not exist.
+- A model that is not in the table, or not one of the kind (`field-create "x" model = option`), is `ILLEGAL_DATA_MODEL`; a `range` missing with an `option…` model, or given with another one, is `ILLEGAL_RANGE`. Both are static errors.
+- `field-delete "n"` and `trait-delete "n"` remove a definition. `NO_SUCH_DECLARATION` if no definition is named `n`, or if it is a definition of the other kind; `DECLARATION_IN_USE` while a field or a trait uses it, including one held by a feature set or a feature of the header.
+
+A definition cannot be renamed. Its name is the `type` of every field or trait that
+uses it, which is read-only (section "4.5"), and a rename would re-key all of them
+behind the writer's back. To change it, delete the fields or traits, create them
+again under another type, and delete the definition.
 
 ## 3. Components and parentage
 
@@ -2874,6 +3000,7 @@ A block consists of
   - another block, with its header and body: block can be nested
   - one or several commands. Those commands have neither an `under` nor an `on` clause, since the parent is given by the block header. They may carry an `at` clause, an `as $LABEL` binding, and a multiplicity keyword, exactly as at top level.
   - `language-default` directives, whose scope is then the block (section "2.1.1").
+  - the directives that change the dictionary — `language-create`, `language-delete` and the declaration directives (sections "2.1.3" to "2.1.5"). They are operations and are not scoped: what they do outlives the block.
   - Note that an `upsert`, `ensure` or `update` cannot be in the scope of a `create` command, be it at the direct upper level or indirectly related.
   - **`create entry(...)` cannot appear in a block body.** A block header supplies a parent, and an `entry` has none (section "2"); the two statements cannot both be honoured. The verdict is `ILLEGAL_PARENT`, the same code as for any other impossible parentage, and it is a static error. An entry is created at top level, and the block that fills it is then written with that `create entry` as its own header.
   - **`move` cannot appear in a block body** (`MOVE_NOT_ALLOWED_IN_BLOCK`, a static error). A `move` names two parents — the source parent and the destination parent — while a block header supplies exactly one, and a block body command takes no `under` clause with which to supply the other. Rather than give `move` a special dispensation to carry one `under` clause inside a block, the language keeps the rule simple: a `move` is written at top level, where both of its parents are visible in the command itself.
@@ -3012,7 +3139,7 @@ Errors are of two kinds, and an implementation MUST report all the static errors
 of a script before applying any command:
 
 - **Static errors** depend only on the text of the script and on the metamodel: unknown component or property name, property not available on the component type, illegal parentage, wrong selection strategy, forbidden pseudo-property, missing required initializer, an operator applied to a datatype that does not admit it, a reference target that is neither an entry nor a sense, an ancestor chain that does not reach the root, a missing parent clause, `ILLEGAL_HN`, `ILLEGAL_ORDINAL`, `DUPLICATE_PROPERTY`, `DUPLICATE_LABEL`, `UNKNOWN_LABEL`, and every syntax error.
-- **Dynamic errors** depend on the state of the dictionary: `NOT_FOUND`, `AMBIGUOUS_REFERENCE`, `CANNOT_CREATE_DUPLICATE`, `UNSET_PROPERTY`, `UNSET_QUALIFIED_PROPERTY`, `INDEX_OUT_OF_BOUNDS`, `MOVING_TO_CURRENT_POSITION`, `SELF_ANCESTOR`, the language-list errors of section "2.1", and the `clear` invariants.
+- **Dynamic errors** depend on the state of the dictionary: `NOT_FOUND`, `AMBIGUOUS_REFERENCE`, `CANNOT_CREATE_DUPLICATE`, `UNSET_PROPERTY`, `UNSET_QUALIFIED_PROPERTY`, `INDEX_OUT_OF_BOUNDS`, `MOVING_TO_CURRENT_POSITION`, `SELF_ANCESTOR`, the language-list errors of section "2.1" (`NO_SUCH_OBJECT_LANGUAGE`, `NO_SUCH_META_LANGUAGE`, `LANGUAGE_ALREADY_EXISTS`, `CANNOT_DELETE_LAST_LANGUAGE`, `LANGUAGE_IN_USE`), the declaration errors of sections "2.1.4" and "2.1.5" (`DECLARATION_ALREADY_EXISTS`, `NO_SUCH_DECLARATION`, `DECLARATION_IN_USE`, `DECLARATION_IS_BUILT_IN`, `DECLARATION_IS_EXTERNAL`), and the `clear` invariants.
 
 Appendix B gives the kind of each error code.
 
@@ -3104,7 +3231,9 @@ order is significant).
   "danglingReferences": [],
   "summary": {
     "componentsCreated": 1, "componentsDeleted": 0, "componentsMoved": 0,
-    "propertiesSet": 1, "propertiesRemoved": 1, "languagesCreated": 0
+    "propertiesSet": 1, "propertiesRemoved": 1, "languagesCreated": 0,
+    "languagesDeleted": 0, "declarationsCreated": 0, "declarationsDeleted": 0,
+    "declarationsRenamed": 0
   }
 }
 ```
@@ -3118,12 +3247,12 @@ Normative points about the plan document:
 - **Operation numbering.** `index` is 1-based and counts operations across the whole script, flat, in source order, whatever the block nesting. The rule for what counts as an operation is: **anything that resolves a component or changes the dictionary.** So:
   - every command is an operation;
   - a **block header is an operation**, whether it is a selector chain, a `create`, an `upsert` or an `ensure`; it takes the index preceding its body's operations;
-  - `language-create` is an operation, since it changes the dictionary and carries a `languageCreated` effect;
+  - every directive but `language-default` is an operation, since it changes the dictionary and carries one effect: `language-create`, `language-delete` and the declaration directives of sections "2.1.4" and "2.1.5";
   - a `with` header and a `language-default` directive are **not** operations and take no index: they bind names for the rest of a scope and change nothing.
 
   The same numbering is what `commandIndex` refers to in the conformance corpus (Appendix D.1), so that a case can point at a command inside a block.
 - `error`, where present, is an object `{ "code": "...", "message": "...", "position": {...} }`. `code` is one of Appendix B and is the only part an automated comparison relies on; `message` is free prose and MUST NOT be compared.
-- `effects` uses exactly these seven `kind` values, each with exactly these fields. Because the plan document is the comparable artifact, the shape of an effect is normative, not illustrative:
+- `effects` uses exactly these eleven `kind` values, each with exactly these fields. Because the plan document is the comparable artifact, the shape of an effect is normative, not illustrative:
 
 | `kind` | Fields | Meaning |
 |---|---|---|
@@ -3134,6 +3263,10 @@ Normative points about the plan document:
 | `propertyReplaced` | `property`, `language`, `oldValue`, `newValue` | a value is written over an existing one |
 | `propertyRemoved` | `property`, `language`, `oldValue`, `newValue` (always `null`) | a value is removed |
 | `languageCreated` | `languageKind`, `language` | `language-create` adds a language to one of the dictionary's language lists (section "2.1.3") |
+| `languageDeleted` | `languageKind`, `language` | `language-delete` removes a language from one of the dictionary's language lists (section "2.1.3") |
+| `declarationCreated` | `declarationType`, `name`, `featureSet` | a `feature-set-create`, `feature-create`, `field-create` or `trait-create` declares a feature set, a feature or a definition. `declarationType` is `feature-set`, `feature`, `field` or `trait`; `featureSet` is the feature set of a feature, and `null` otherwise (sections "2.1.4" and "2.1.5") |
+| `declarationDeleted` | `declarationType`, `name`, `featureSet` | a `feature-set-delete`, `feature-delete`, `field-delete` or `trait-delete` removes one |
+| `declarationRenamed` | `declarationType`, `name`, `featureSet`, `newName` | a `feature-set-rename` or `feature-rename` renames one; `name` is the name before the rename. Every component that now reads the new name is covered by this one effect |
 
 - Writing a value **equal** to the one already there is still a change of state performed by the command, and yields a `propertyReplaced` effect whose `oldValue` and `newValue` are equal. Plan mode does not compare values in order to suppress an effect: a command that ran is reported.
 
@@ -3223,13 +3356,14 @@ whitespace, it matches one of the following:
    - a component letter (or component name) immediately followed by `(` — a constructor with no parent path, which only `c` and `p` accept (`c e("mami")`, `p entry(f="mami", has-gloss="pig")`), or
    - `(` — the parenthesis of a property command with no path, which is admitted **only on an indented line**, where the parent is supplied by the enclosing indented block (`s (d@en = "A pig")`, section "3.3"), or
    - a component letter (or component name) immediately followed by `[`, `#` or `^` — a *relative path*, or the bare target step of a `d` or an `e`, also admitted **only on an indented line**, whose first step is a child of the enclosing indented block's component (`d x#1`, `d n^draft`, `d s[g="pig"] x#1`, section "3.3").
-2. `language-default ` or `language-create ` followed by `object` or `meta`:
+2. a directive of Part 1, sections "2.1.1" and "2.1.3" to "2.1.5", written exactly as in the reference syntax: `language-default `, `language-create ` or `language-delete ` followed by `object` or `meta`; or one of the declaration keywords `feature-set-create`, `feature-set-delete`, `feature-set-rename`, `feature-create`, `feature-delete`, `feature-rename`, `field-create`, `field-delete`, `trait-create`, `trait-delete`, followed by whitespace and a quoted name. The quote is what keeps a prose line beginning with "feature-create" from being taken for a directive.
 
 ```
 language-default object = "tww"
-language-default meta = "en"
-language-create object = "tpi"
 language-create meta = "fr"
+language-delete object = "tpi"
+feature-create "Dialectal Variant" in "variant-type"
+trait-create "variant-type" model = option range = "variant-type"
 ```
 
 3. the version pragma `%liftpatch 1.0`, anywhere before the first command line of the document; a pragma declaring a `sigil` must be the first non-blank line (section "1.1").
@@ -3747,7 +3881,7 @@ without restatement:
 
 - its commands are executed in source order, each seeing the state left by the preceding ones;
 - it is a transaction: if any command in it fails, the block is rolled back, and — since the block then fails — so is the whole document (Part 2, section "12.2");
-- `as $<label>` bindings and `language-default` directives inside it are scoped to it; a label bound by the **anchor** is visible after the block, in the enclosing scope;
+- `as $<label>` bindings and `language-default` directives inside it are scoped to it; a label bound by the **anchor** is visible after the block, in the enclosing scope. The directives that change the dictionary may be indented too, and are not scoped (Part 1, section "2.1.3");
 - `m` may not appear in it (`MOVE_NOT_ALLOWED_IN_BLOCK`);
 - `p`, `e` and `u` may not appear in the scope of a `c`, directly or indirectly (`CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK`): a component the same document has just created cannot already have children to upsert or assert;
 - `c e(...)` may not appear in it: an entry has no parent (`ILLEGAL_PARENT`).
@@ -5061,11 +5195,13 @@ listed in B.4.
 | `CANNOT_CLEAR_IDENTITY_PROPERTY` | `clear` targets a scalar property belonging to the natural identity property set | 9.3.1 |
 | `CANNOT_CLEAR_REQUIRED_PROPERTY` | `clear` targets a scalar property that Appendix A declares required | 9.3.1 |
 | `SYNTAX_ERROR` | the script does not parse, or uses a construct the grammar forbids in that position (see the list below) | Appendix C |
+| `ILLEGAL_DATA_MODEL` | a `field-create` or `trait-create` names a data model that is not LIFT's, or one of the other kind | 2.1.5 |
+| `ILLEGAL_RANGE` | a `range` is missing with an `option`, `option-collection` or `option-sequence` model, or given with another one | 2.1.5 |
 
 Syntax errors are static too, and are reported with their position. They include
 in particular:
 
-- in both syntaxes: an `ensure` with an initializer list instead of a selector; an `at` clause on `ensure` or on a command creating an `entry`; an `at before` / `at after` step whose component type is not the type being placed (section "6.2.1"); a step combining an ordinal or a type key with a predicate list; an ordinal or a type key written on a constructor, as in `create note^general(...)`; an unterminated string, a raw line break inside a string, or a backslash followed by anything other than `"` or `\` in a double-quoted string (section "1.2");
+- in both syntaxes: a blank name in a declaration directive (section "2.1.4"); an `ensure` with an initializer list instead of a selector; an `at` clause on `ensure` or on a command creating an `entry`; an `at before` / `at after` step whose component type is not the type being placed (section "6.2.1"); a step combining an ordinal or a type key with a predicate list; an ordinal or a type key written on a constructor, as in `create note^general(...)`; an unterminated string, a raw line break inside a string, or a backslash followed by anything other than `"` or `\` in a double-quoted string (section "1.2");
 - in LiftPatchRef: `move entry[...]`; a `move` without an `at` clause;
 - in LiftPatchShort: a command spread over several physical lines; `m /mami`, which would move an entry; a tab character in the indentation of a command line, and an indentation that matches no open block level (Part 3, section "3.3").
 
@@ -5085,6 +5221,13 @@ in particular:
 | `NO_SUCH_OBJECT_LANGUAGE` | an object language code is not in the dictionary's object language list | 2.1, 4.2 |
 | `NO_SUCH_META_LANGUAGE` | a meta language code is not in the dictionary's meta language list | 2.1, 4.2 |
 | `LANGUAGE_ALREADY_EXISTS` | `language-create` names a language the dictionary already has | 2.1.3 |
+| `CANNOT_DELETE_LAST_LANGUAGE` | `language-delete` names the only language of its kind | 2.1.3 |
+| `LANGUAGE_IN_USE` | `language-delete` names a language a text of the dictionary is written in, or the default language bound in a scope still open | 2.1.3 |
+| `DECLARATION_ALREADY_EXISTS` | a declaration directive creates a feature set, a feature or a definition under a name already declared, or renames one onto such a name | 2.1.4, 2.1.5 |
+| `NO_SUCH_DECLARATION` | a declaration directive names a feature set, a feature or a definition the dictionary does not declare, or a definition of the other kind | 2.1.4, 2.1.5 |
+| `DECLARATION_IN_USE` | a feature set, a feature or a definition still in use would be deleted | 2.1.4, 2.1.5 |
+| `DECLARATION_IS_BUILT_IN` | one of the seven built-in feature sets would be deleted or renamed | 2.1.4 |
+| `DECLARATION_IS_EXTERNAL` | a feature set defined in an external ranges file that was not read would be renamed | 2.1.4 |
 
 ### B.3 Codes that must not be raised
 
@@ -5156,7 +5299,18 @@ item              ::= command | block | directive | comment
 pragma            ::= '%liftpatch' version { name '=' string }
 version           ::= integer '.' integer
 
-directive         ::= ( 'language-default' | 'language-create' ) lang-kind '=' string
+directive         ::= language-directive | declaration
+language-directive::= ( 'language-default' | 'language-create' | 'language-delete' )
+                      lang-kind '=' string
+declaration       ::= 'feature-set-create' string
+                    | 'feature-set-delete' string
+                    | 'feature-set-rename' string 'to' string
+                    | 'feature-create' string 'in' string
+                    | 'feature-delete' string 'in' string
+                    | 'feature-rename' string 'in' string 'to' string
+                    | ( 'field-create' | 'trait-create' ) string
+                      [ 'model' '=' name ] [ 'range' '=' string ]
+                    | ( 'field-delete' | 'trait-delete' ) string
 lang-kind         ::= 'object' | 'meta'
 
 block             ::= block-header '{' { block-item } '}'
@@ -5240,8 +5394,13 @@ Notes on the productions that carry a rule of their own:
 - The grammar admits a `label-ref` as any `step` of a `chain`, including after `within`. A label denotes exactly one component, so an existential join below one reduces to the strict one and the two spellings mean the same thing (section "6.3").
 - `at-clause` is forbidden when the constructor creates an `entry` (section "6.2"). The grammar cannot express that restriction, since `component-type` is one production; it is a static error.
 - On a property of datatype `reference`, the `value` of an `assignment`, of an `initializer` and of a `predicate` alike must be a `chain` or a `label-ref`, never a `string` (section "10"): `REFERENCE_VALUE_MUST_BE_A_CHAIN`. The grammar admits `string` there because it does not know datatypes.
+- `declaration` admits a `model` and a `range` on both `field-create` and `trait-create`: which data model suits which kind, and whether it takes a `range`, are the static errors `ILLEGAL_DATA_MODEL` and `ILLEGAL_RANGE` (section "2.1.5"). The `name` of a model is one of the eight of that section.
+- `in`, `to`, `model` and `range`, and the directive keywords themselves, are keywords only where `directive` is parsed. Anywhere else they remain names: a language code (`to` is Tongan, `form@to`), a label (`$range`), a type key (`note^model`).
 
 ### C.2 LiftPatchShort
+
+A directive line is written as in the reference syntax: the `directive` of `command-line`
+below is the production of section "C.1".
 
 ```ebnf
 document          ::= { line }
@@ -5368,7 +5527,7 @@ The corpus is a JSON array of cases. Each case is an object:
 { "status": "error", "code": "AMBIGUOUS_REFERENCE", "kind": "dynamic", "commandIndex": 1 }
 ```
 
-- For an `ok` case, `effects` is the concatenation, in order, of the `effects` (or `applications`) arrays that plan mode produces for the script (section "12.4.1"), restricted to the comparable fields. **This list is the single normative statement of which fields of an effect are compared**, and it is exhaustive: `kind`, `componentType`, `property`, `language`, `languageKind`, `oldValue`, `newValue`, `position`, `fromPosition`, `toPosition`. The remaining fields of an effect — `fromParent` and `toParent`, which contain a `path` — are informative and are never compared. An implementation passes the case when its plan document yields exactly that list, and when applying the script for real produces the same effects.
+- For an `ok` case, `effects` is the concatenation, in order, of the `effects` (or `applications`) arrays that plan mode produces for the script (section "12.4.1"), restricted to the comparable fields. **This list is the single normative statement of which fields of an effect are compared**, and it is exhaustive: `kind`, `componentType`, `property`, `language`, `languageKind`, `oldValue`, `newValue`, `position`, `fromPosition`, `toPosition`, `declarationType`, `name`, `featureSet`, `newName`. The remaining fields of an effect — `fromParent` and `toParent`, which contain a `path` — are informative and are never compared. An implementation passes the case when its plan document yields exactly that list, and when applying the script for real produces the same effects.
 - `danglingReferences` and `warnings` are compared when the case states them, and are expected to be empty when it does not.
 - For an `error` case, the implementation passes when it raises exactly `code`, of exactly that `kind`, on exactly the operation at `commandIndex`, **and** when the dictionary is unchanged afterwards (section "12.2"). `commandIndex` is the `index` of section "12.4.1": 1-based, flat across the whole script, counting a block header as an operation of its own, and `0` for an error carried by the script as a whole, such as a pragma error.
 - `message` text is never compared. Neither is `path`, which is informative.
@@ -6107,7 +6266,84 @@ implementation MAY add cases; it MUST pass these.
     "description": "the form of a variant is required at creation",
     "dictionary": "standard",
     "script": "create variant() under entry[form@tww = \"mami\", hn = 1]",
-    "expect": { "status": "error", "code": "MISSING_REQUIRED_PROPERTY", "kind": "static", "commandIndex": 1 } }
+    "expect": { "status": "error", "code": "MISSING_REQUIRED_PROPERTY", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-094", "section": "2.1.3", "syntax": "LiftPatchRef",
+    "description": "a language no text uses and no scope binds is deleted",
+    "dictionary": "standard",
+    "script": "language-create meta = \"de\"\nlanguage-default meta = \"en\"\nlanguage-delete meta = \"de\"",
+    "expect": { "status": "ok", "effects": [
+      { "kind": "languageCreated", "languageKind": "meta", "language": "de" },
+      { "kind": "languageDeleted", "languageKind": "meta", "language": "de" } ] } },
+
+  { "id": "C-095", "section": "2.1.3", "syntax": "LiftPatchRef",
+    "description": "a language texts are written in cannot be deleted",
+    "dictionary": "standard",
+    "script": "language-delete object = \"tpi\"",
+    "expect": { "status": "error", "code": "LANGUAGE_IN_USE", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-096", "section": "2.1.3", "syntax": "LiftPatchRef",
+    "description": "language-delete names a language of the dictionary",
+    "dictionary": "standard",
+    "script": "language-delete object = \"xyz\"",
+    "expect": { "status": "error", "code": "NO_SUCH_OBJECT_LANGUAGE", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-097", "section": "2.1.4", "syntax": "LiftPatchRef",
+    "description": "a feature set and a feature are declared, and the feature renamed",
+    "dictionary": "standard",
+    "script": "feature-set-create \"variant-type\"\nfeature-create \"Free\" in \"variant-type\"\nfeature-rename \"Free\" in \"variant-type\" to \"Free Variant\"",
+    "expect": { "status": "ok", "effects": [
+      { "kind": "declarationCreated", "declarationType": "feature-set", "name": "variant-type", "featureSet": null },
+      { "kind": "declarationCreated", "declarationType": "feature", "name": "Free", "featureSet": "variant-type" },
+      { "kind": "declarationRenamed", "declarationType": "feature", "name": "Free", "featureSet": "variant-type", "newName": "Free Variant" } ] } },
+
+  { "id": "C-098", "section": "2.1.4", "syntax": "LiftPatchRef",
+    "description": "a built-in feature set cannot be deleted",
+    "dictionary": "standard",
+    "script": "feature-set-delete \"grammatical-info\"",
+    "expect": { "status": "error", "code": "DECLARATION_IS_BUILT_IN", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-099", "section": "2.1.4", "syntax": "LiftPatchRef",
+    "description": "a part of speech that senses have cannot be deleted",
+    "dictionary": "standard",
+    "script": "feature-delete \"Noun\" in \"grammatical-info\"",
+    "expect": { "status": "error", "code": "DECLARATION_IN_USE", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-100", "section": "2.1.4", "syntax": "LiftPatchRef",
+    "description": "a renamed feature is declared under its new name",
+    "dictionary": "standard",
+    "script": "feature-rename \"Noun\" in \"grammatical-info\" to \"N\"\nfeature-create \"N\" in \"grammatical-info\"",
+    "expect": { "status": "error", "code": "DECLARATION_ALREADY_EXISTS", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-101", "section": "2.1.5", "syntax": "LiftPatchRef",
+    "description": "an option trait names its range",
+    "dictionary": "standard",
+    "script": "trait-create \"variant-type\" model = option",
+    "expect": { "status": "error", "code": "ILLEGAL_RANGE", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-102", "section": "2.1.5", "syntax": "LiftPatchRef",
+    "description": "a field takes a field's data model",
+    "dictionary": "standard",
+    "script": "field-create \"x\" model = option",
+    "expect": { "status": "error", "code": "ILLEGAL_DATA_MODEL", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-103", "section": "2.1.4", "syntax": "LiftPatchRef",
+    "description": "the range of a trait definition cannot be deleted",
+    "dictionary": "standard",
+    "script": "feature-set-create \"variant-type\"\ntrait-create \"variant-type\" model = option range = \"variant-type\"\nfeature-set-delete \"variant-type\"",
+    "expect": { "status": "error", "code": "DECLARATION_IN_USE", "kind": "dynamic", "commandIndex": 3 } },
+
+  { "id": "C-104", "section": "2.1.3", "syntax": "LiftPatchRef",
+    "description": "a declaration is an operation, and is rolled back with the rest of a failing script",
+    "dictionary": "standard",
+    "script": "feature-set-create \"variant-type\"\ncreate sense(gloss@en = \"dog\") under entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "CANNOT_CREATE_DUPLICATE", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-105", "section": "2.1.3", "syntax": "LiftPatchRef",
+    "description": "a language bound as the default in scope counts as used: language-create binds it",
+    "dictionary": "standard",
+    "script": "language-create object = \"hui\"\nlanguage-delete object = \"hui\"",
+    "expect": { "status": "error", "code": "LANGUAGE_IN_USE", "kind": "dynamic", "commandIndex": 2 } }
 ]
 ```
 
