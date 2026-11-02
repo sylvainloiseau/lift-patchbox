@@ -1,4 +1,0 @@
-<?xml version="1.0" encoding="UTF-8"?><lift version="0.15" producer="fr.cnrs.lacito.liftapi"><header><ranges><range id="note-type"></range><range id="relation-type"></range><range id="inverse-type"></range><range id="etymology-type"></range><range id="translation-type"></range><range id="grammatical-info"></range><range id="annotation-type"></range><range id="variant-type"></range></ranges><fields><field-definition name="source"></field-definition></fields></header>
-<entry id="ca33af2e-770e-4c17-ba5e-b2f81248a11d"><field name="source"><form lang="en"><text>2021.1</text></form></field><lexical-unit><form lang="tww"><text>trã</text></form></lexical-unit></entry>
-
-</lift>
