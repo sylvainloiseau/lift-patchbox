@@ -185,10 +185,26 @@ mvn test              # the test suite alone
 mvn javadoc:javadoc   # the API documentation, under target/reports/apidocs
 ```
 
-The build needs `fr.cnrs.lacito:lift-api:0.1-SNAPSHOT` in the local Maven
-repository. The ANTLR sources are `src/main/antlr4/.../LiftPatchRef.g4` and
+The dictionary model, `io.github.sylvainloiseau:lift-api`, is fetched from Maven
+Central; its version is the `lift-api.version` property of `pom.xml`. The ANTLR sources are `src/main/antlr4/.../LiftPatchRef.g4` and
 `LiftPatchShort.g4`; `mvn generate-sources` regenerates the parsers into
 `target/generated-sources/antlr4` on its own, so there is nothing to check in.
+
+## Releasing
+
+lift-patchbox is published to Maven Central as
+`io.github.sylvainloiseau:lift-patchbox` by `.github/workflows/release.yml`, when a
+version tag is pushed:
+
+```bash
+git tag v0.1.0 && git push origin v0.1.0
+```
+
+The version released is the tag without its `v`; the pom keeps its `-SNAPSHOT`
+version. The workflow builds and tests the library, signs it and uploads it with
+its sources and javadoc (`mvn -P release deploy`), then attaches the command-line
+jar with its dependencies to the GitHub release of the tag. It needs four
+repository secrets, listed at the top of the workflow file.
 
 ## Tests
 
@@ -230,7 +246,7 @@ normative metamodel (Appendix A), the error codes (Appendix B), the grammars
 
 ## License
 
-This project is part of the LIFT ecosystem and follows its licensing terms.
+Licensed under the Academic Free License version 3.0: see `LICENSE`.
 
 ## Contact
 

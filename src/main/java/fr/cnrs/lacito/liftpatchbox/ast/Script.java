@@ -38,12 +38,12 @@ public record Script(
     }
 
     /**
-     * The version this script targets, which is {@code 1.0} when no pragma is written.
+     * The version this script targets, which is {@code 1.1} when no pragma is written.
      *
      * @return the version string
      */
     public String version() {
-        return pragma == null ? "1.0" : pragma.version();
+        return pragma == null ? "1.1" : pragma.version();
     }
 
     /**

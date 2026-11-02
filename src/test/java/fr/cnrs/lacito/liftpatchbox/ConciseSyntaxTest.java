@@ -94,7 +94,7 @@ class ConciseSyntaxTest extends PatchTestSupport {
         void aSigilDecidesWhichLinesAreCommands() {
             assertEffects(
                 applyConcise("""
-                    %liftpatch 1.0 sigil=">"
+                    %liftpatch 1.1 sigil=">"
                     c /memi/puppy is prose here, since the line carries no sigil
                     > c /memi/puppy
                     """),

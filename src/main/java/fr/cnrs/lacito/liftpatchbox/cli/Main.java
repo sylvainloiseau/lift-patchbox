@@ -41,7 +41,7 @@ import picocli.CommandLine.Parameters;
 @Command(
     name = "lift-patchbox",
     mixinStandardHelpOptions = true,
-    version = "lift-patchbox 0.1-SNAPSHOT (LiftPatch 1.0)",
+    version = "lift-patchbox 0.1-SNAPSHOT (LiftPatch 1.1)",
     sortOptions = false,
     description = "Apply a LiftPatch script to a LIFT dictionary.",
     footer = {

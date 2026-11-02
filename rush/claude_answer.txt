@@ -1,0 +1,301 @@
+Could you read the domain specific language (DSL) specification in [@specification.md](file:///Users/sloiseau/workspace/lift-patchbox/specification.md) and report any logical contradiction, ambiguity, or uncovered case that could prevent a correct implementation?
+
+
+
+I read `specification.md` in full (2,489 lines). Below is the audit, in the two parts you asked for. Line numbers refer to the current file.
+
+---
+
+# Part A — Inconsistencies and ambiguities in the formalism
+
+## A.1 Hard contradictions (two normative statements that cannot both hold)
+
+**1. `ensure` is defined twice, incompatibly.**
+Design principle 12 (line 24): "`ensure` checks whether a component exists and fails otherwise" — a pure assertion. §8.3 (line 1337): "`ensure` is equivalent to an idempotent component upsert without changing existing properties" — i.e. it creates when missing. These are different commands. Everything downstream depends on the choice: whether `ensure` needs required non-identity initializers, whether it can appear in a `create` block (line 1672 forbids it, with the rationale *"expecting that a sense exist on a newly created entry makes no sense"* — that rationale only works under the assertion reading), and which error it raises (no code is ever named for a failing `ensure`).
+
+Note that the "idempotent upsert" reading makes `ensure` nearly unusable: §5.5 (line 708) forbids required non-identity properties on `ensure`, while §6.1 rule 1 (line 809) requires every required property to be present after creation. Any component with a required non-identity property — `note`, `field`, `translation`, `trait`, `etymology`, `variant`, `relation`, `reversal` — could therefore never be created by `ensure`. Combined with "`ensure` cannot be used with an `entry`" (line 1352), only `sense`, `example`, `pronunciation`, `illustration`, `media` remain. That strongly suggests the assertion reading is the intended one and §8.3 is stale.
+
+**2. `ensure` uses initializer parentheses in Part 2 and selector brackets in Part 3.**
+§7 (line 863): `ensure COMPONENT(initializers) under PARENT`; §8.3 examples use `ensure sense(...)`. Part 3 §3 (line 1947): `e <parent_path> <component_type>[selector]`. Since design principles 2 and 3 (lines 14–15) make `(...)` mean *create/initialize* and `[...]` mean *select*, and since the two syntaxes are required to have identical semantics (line 1780), one of the two is wrong. This is the same unresolved question as finding 1, surfacing as syntax.
+
+**3. `clear url` example violates the rule stated 15 lines later.**
+§9.3 line 1550 gives `clear url on illustration[...]` as a legal example. Line 1565: "Scalar properties listed in the component identity properties cannot be cleared." Per table 4.1 (line 229), `Illustration.url` *is* the identity property (and is required). The example is illegal under the rule.
+
+**4. `comment` is simultaneously language-qualified and scalar.**
+Table 4.1 (line 238) declares `Annotation.comment` as `multitext / M`. §4.4's exhaustive list of language-key-supporting properties (lines 318–326) omits `comment`. §4.4 then mandates that the validator MUST reject any scalar + language key with `LANG_KEY_NOT_SUPPORTED_ON_SCALAR` (line 339). So `comment@en` is both mandatory (no unqualified multitext assignment exists) and mandatorily rejected. Symmetrically, §4.4's scalar list (lines 330–337) omits `value`, `when`, `who`, and includes `hn`, which is not a property at all but a pseudo-property (§5.3.1). The two lists in §4.4 duplicate information already in table 4.1 and have drifted from it.
+
+**5. Two error codes for the same `has-gloss` misuse.**
+Line 663: misuse of `has-gloss` with a command that does not allow it → `COMMAND_NOT_ALLOWING_HAS_GLOSS`. Line 665: `has-gloss` with a `create` command → `ILLEGAL_USE_OF_HAS_GLOSS`. `create` is a command that does not allow it, so both apply.
+
+**6. A wrong `hn` either raises or silently falls through to creation.**
+Line 529: "if the `hn` value is not the hn value of any entry in the homophone set, an `HN_NOT_EXISTING` exception is raised." Line 515 (`upsert`): "because it exists but not with this `hn` number, then a new `entry` will be created". For `upsert entry(form=…, hn=…)` these prescribe opposite behaviour.
+
+**7. `index` inside `within` is both forbidden and allowed.**
+Line 366 and §7.3.2 line 1086 exclude `hn`, `has-gloss`, `index`, `ID` from `within` selectors. The applicability table (line 714) gives `index` in the column *"on parent selector (in `under`, `on`, `within` clause)"* the value "as sole selector only". The same table's `ID` row correctly writes "forbidden in `within`"; the `index` row does not.
+
+**8. Part 3 translates path steps with `under` where its own rule says `within`.**
+Rule at line 2010: path steps are joined with `within` semantics; only the direct target of `create`/`upsert`/`delete`/`ensure` is joined to the last path step with `under`. But:
+- line 2108: `d /e[f="mami"]/s[g="pig"]` → `delete sense[...] under entry[...]`
+- line 2138: `m /e[f="mami"]/s[g="pig"] at index 1` → `move sense[...] under entry[...]`
+- line 2123 (correctly): `... under sense[...] within entry[...]`
+
+This is not cosmetic: `under`/`of` requires the entry to be unambiguous; `within` does not. The two readings give different results (and different errors) for the very common case of homophonous entries.
+
+**9. `of` is described as always uniquely resolving, but §7.3.3 resolves it existentially.**
+§7.3.4 line 1117: "An `of` clause identifies the immediate parent … where each step is uniquely and unambiguously selected", reinforced by §5.1 (a parent selector must carry full identity). Yet in §7.3.3's worked example (lines 1092–1113) the clause `of example[text="a mami jefi"]` sits at the left edge of a `within` chain and is explicitly evaluated over the candidate set, with `AMBIGUOUS_REFERENCE` only if several senses have such an example. So an `of` clause *adjacent to a `within`* silently changes semantics. The rule governing this is never stated.
+
+**10. Inline comments are used but not permitted.**
+Line 41 defines a comment as "line starting with `#`". Lines 112–117, 585, and others use trailing comments after a command (`set form = "mammi"  # equivalent to …`).
+
+**11. The enumeration of what a reference script may contain omits blocks.**
+Lines 37–41 state a reference script contains *only* verb-initial command lines, `language-*` instructions, and comments. §11 introduces block headers that begin with a component name (`entry[form@tww = "mami"] {`, line 1679) and closing `}` lines. Under the Part 1 rule these lines are illegal.
+
+**12. `INCOMPATIBLE_DESTINATION` vs `ILLEGAL_PARENT`; `CANNOT_CREATE_DUPLICATE` vs `DUPLICATE_COMPONENT`.**
+Line 178 mandates `ILLEGAL_PARENT` for "moving a component towards an illegal parent"; line 1417 mandates `INCOMPATIBLE_DESTINATION` for the same condition. Line 880 mandates `DUPLICATE_COMPONENT` when `create` would duplicate a natural identity; lines 1423, 1479, 1516 and 1655 mandate `CANNOT_CREATE_DUPLICATE` for the identical invariant violated by `move`, `set`, `update` and by creating a duplicate relation/variant/reversal. Two names, one condition, in both cases.
+
+**13. `c /mami` cannot be parsed by the grammar that is supposed to define it.**
+Part 3 §3 (lines 1910–1916) gives `c <parent_path> <component_type>(<initializer>)` or `c e(<initializer>)`; the path is always the *parent*. §6.1 lines 2233–2236 then states that `c /mami` "creates an entry with form mami", and line 2267 that `c /mami/pig` creates a sense — here the path is the *target*, with no component/initializer at all. So a path-only command means "parent" in §3 and "target" in §6.1/§8. Related: `d /mami` deletes the entry (target), `c /mami` creates it — the same surface form has opposite roles depending on the verb, and for `c /mami/pig` it is never said whether the entry must pre-exist, must be unique, or is created too (contrast §8 line 2438, where `p /"mami"/"pig"` creates both).
+
+**14. §5.1's enumeration of selector strategies does not cover the legal selectors.**
+Line 356–368 lists four mutually exclusive strategies: ID; identity property/properties; (entry only) qualified `form` + `has-gloss`; `index`. Missing: `form` + `hn`, which §5.3.2.1 mandates (line 518); and bare `form` alone for an entry, explicitly permitted at line 484. Moreover line 660 says `has-gloss` "may be combined with other entry predicates", which contradicts "must contain only one of these four strategies" and the associated `DUPLICATE_SELECTOR` rule (line 368). As written, a validator implementing §5.1 literally rejects the spec's own examples.
+
+**15. Worked example mismatch in §7.3.3.** The selector at line 1097 is `sense[gloss="pig"]`; the prose at line 1112 filters on "a `sense` child with a category `Noun`". Also, the algorithm never rejoins the `within` chain with the outer `on trait[...] of translation[...]` steps — the example's actual target is never resolved.
+
+## A.2 Under-specification that blocks a correct implementation
+
+**16. Is "Required at creation" a creation-time precondition or a permanent invariant?**
+The spec enforces it as an invariant for multitexts (`CANNOT_CLEAR_REQUIRED_MULTITEXT`, §9.3) but says nothing for required *scalars* that are not identity properties — e.g. `Trait.value`, `Note.text`… (`text` is multitext; `Trait.value` is the clean case: required, scalar, non-identity). §9.3 line 1565 permits clearing it; the §5.5 table row "Required non-identity property / clear" says "only if another value remains", which is meaningless for a scalar. So whether `clear value on trait[...]` is legal — and whether a component may exist in a state that `create` would have rejected — is undefined.
+
+**17. Three different errors for "clear something that is not set".**
+Line 888 (`UNSET_PROPERTY`), line 1543 (`QUALIFIED_PROPERTY_NOT_FOUND`), line 1545 (`EMPTY_MULTITEXT`), line 1560 (`UNSET_PROPERTY` for scalars). The decision table (scalar vs multitext; qualified vs unqualified; empty vs absent) is never given.
+
+**18. `update` granularity on multitexts.** §9.2 line 1502: `UNSET_PROPERTY` "if the property was not already set". If `definition@fr` exists and `update definition@en = …` is issued, is "the property" the multitext (set → succeeds, creating the `en` sub-entry, which is `set` semantics, not `update`) or the qualified value (unset → error)? The `clear` section uses per-qualified-value granularity; `update` does not say.
+
+**19. The §5.5 applicability table is not a partition.** Its row keys — "Required identity property", "Optional natural property", "Required non-identity property", "Optional scalar property", "Optional multitext property" — overlap. `Sense.definition` (optional, multitext, non-identity) matches rows 2 and 5; `Sense.category` (optional, scalar, non-identity) matches rows 2 and 4, which disagree for `create` ("allowed" vs "allowed") and for the parent-selector column ("allowed only if part of identity" vs "allowed only if declared identity" — differently worded, presumably identical). A validator cannot derive a deterministic verdict from this table. Additional defects in the same table: the parent-selector column header omits `of`; it merges `within` (any property, §7.3.2) with `of`/`on`/`under` (identity only) into one cell, contradicting §7.3.2; the `delete`/`move` columns say identity properties are "required", contradicting §5.3.1 (ID alone) and §5.3.3 (`index` alone); the `hn` row uses the non-normative phrasing "not as a property target".
+
+**20. `hn` is declared out of scope yet is normatively validated.** Lines 533–560 say hn generation "is not in the scope of this DSL", but lines 528–531 require the implementation to raise `HN_WITHOUT_HOMOPHONE` when the entry has no homophone and `HN_NOT_EXISTING` otherwise — both require knowing the homophone set. Additionally: `HN_WITHOUT_HOMOPHONE` makes a script non-monotonic (`entry[form="mami", hn=1]` works only while a homophone exists, and starts failing when one is deleted); line 560's formula ("its homophone number is the size of the greatest homophone set + 1") is stated as an invariant but is really an assignment rule, is circular (the entry itself belongs to that set), and contradicts line 562 ("`hn` are not guaranteed to be contiguous") and line 538 (stability). `NEGATIVE_HN` is also a misnomer: it is raised for `hn = 0`, which is not negative.
+
+**21. There is no way to refer to a component you just created.** After `create entry(form@tww = "mami")` on a dictionary that already contains "mami" entries, the new entry has an unknown system ID, an unknown `hn`, and an ambiguous form. It is unreachable by any selector. Blocks mitigate this for *descendants* only; `set target = <selector>` (§10) cannot name it at all. This makes "create an entry and a relation pointing to it" inexpressible.
+
+**22. Script-level failure semantics are undefined.** Principle 13 (line 25) covers "a command or atomic block". Nothing says what happens to commands 1–4 when command 5 of a 20-command script fails — commit, roll back, or stop-and-keep. For LiftPatchShort, where commands are interleaved with prose in a document, this is even more pressing (is the document processed as one transaction?). Related: nothing normatively states that top-level commands execute in source order and observe each other's effects (§11 point 4 says this only *inside* a block).
+
+**23. `language-default` scoping is only positional.** "in scope" (line 80) / "from their position in the file until overridden" (line 106). Whether a block introduces a scope, whether a `language-default` inside a block leaks out, and whether it may appear inside a block at all are undefined. Also, `language-create` can silently change the meaning of *earlier-written* defaults resolution: the rule "if there is only one Meta language, use it" (line 81) stops applying as soon as a second is created mid-script. (Incidentally, rules 2 and 3 at lines 81–82 are the same rule: the first element of a one-element list is that element.)
+
+**24. `index`: among same-type siblings or all children?** §3 line 182 says children "can be selected by their position in the parent's list of children"; §5.3.3 line 669 says "amongst its sibling"; §8.1.2 line 1275 says "among the parent list of same-type-components". Only the last is unambiguous. Related and unaddressed: are indices re-evaluated after each command (so that two consecutive `delete example[index = 1]` delete two different components)? Given `move` and `create … at index`, this must be normative.
+
+**25. `move`: is `at POSITION` mandatory?** Line 860–861 always shows it; `MOVING_TO_CURRENT_POSITION` (line 1416) implies it must be present for same-parent moves; nothing states it for cross-parent moves (where "append at end" would be the natural default). Also, whether `move entry` is a parse error or the runtime error `ENTRY_CANNOT_MOVE` (lines 866 vs 1415) is not settled.
+
+**26. `upsert` has no `at POSITION` clause** (line 855) while `create` does (line 852). Where a newly created component lands in its sibling list is undefined for `upsert`, for `ensure`, for embedded initializers (Part 3 §7), and for every command inside a block (§11 never mentions `at`).
+
+**27. `upsert`'s parentheses are simultaneously a selector and an initializer, and the split is never defined.** §5.3.2 line 512 says `hn` "cannot be set by any initializer", yet line 1723 writes `upsert entry(form@tww = "mami", has-gloss="pig")` — pseudo-properties inside initializer parentheses. Special-casing is given for `hn`/`has-gloss` only; the general rule (which parenthesized members are matched against, and which are applied with `set` semantics, in the select branch) is stated only informally at line 1310. Also: line 1333 forbids `upsert entry` with only a `form` but names no error code.
+
+**28. `entry` has no natural identity, yet the general rules assume all components do.** §8.2 line 1309 mandates `MISSING_IDENTITY_PROPERTY` for `upsert` without all identity properties; §6.1 rules 6–7 and §5.5's first table row are written unconditionally. Entry is then patched by exception in §8.1.1, §8.2 and §8.3. The "identity" concept should be defined so that entry's case falls out of the definition rather than being repeatedly excepted.
+
+**29. Reference values are half-specified.** §10 allows a *selector* as an rvalue (`set target = entry[form@tww = "memi"]`) with its own `of` chain (lines 1623–1628). It is not stated whether `within` may appear in a value chain, whether a bare ID string is a legal rvalue (`set target = "pig-44"` — legal inside a selector per line 1636, unspecified as an assignment), or how a reference is written at all in LiftPatchShort (the property code `a` exists at line 1891; no value syntax is ever given). Line 1644 enumerates "Relation or Variant" for the duplicate check while line 1648 and 1655 include Reversal.
+
+**30. The parent/child table claims exhaustiveness but omits three components as parents.** Lines 158–173 give no row for `Trait`, `Illustration`, or `Media`, although `Media` is a child of `Pronunciation` and could plausibly take `annotation`/`field`. "No row" presumably means "no children", but the table is declared exhaustive and normative, so this should be explicit.
+
+**31. Ambiguous natural-identity wording for multitexts.** Line 206: "any of its qualified values can be used for the natural identity, not all its values" suggests cross-language matching. Line 438 defines uniqueness strictly per-language, unset values not counting. Under 438, sense A with `gloss@en="pig"` and sense B with `gloss@fr="pig"` may coexist; line 206 reads as forbidding it. Only one of the two readings can drive the duplicate check in `create`, `set`, `update` and `move`.
+
+**32. LiftPatchShort lexical rules are incomplete.** The forbidden-character set for unquoted values (line 2227, `{/\"'$[]()[]}`) lists `[]` twice, includes `$` which appears nowhere else, and omits `@` — which §6.3 then makes significant as a language suffix (`mami@tww`, line 2380), `,` and `=` (both significant inside initializers), and `#`. Comments are not defined for the short syntax at all. §6.3 also does not say which argument carries the `@lang` suffix in two-unnamed-argument forms such as `f("editorial", "To be checked")`. §4 line 2008 says a step carries "one or two selectors between square brackets" where *predicates* is meant.
+
+**33. The command-line recognition rule is fragile.** Lines 1801–1814: a line is a command iff its first non-whitespace character is one of `c d m p e u s l` followed by whitespace. In a document of ordinary prose (the stated use case, line 1778), English/French sentences beginning "c ", "d '", "s " or "e " are not impossible, and the spec offers no escape mechanism for a prose line that accidentally matches, nor an explicit marker for the intentional case.
+
+**34. LiftPatchShort omits constructs required for parity.** No syntax exists for: `of` (strict-parent) chains — every path step is `within`, so the short syntax cannot demand an unambiguous parent; `hn`; `has-gloss`; `ID` selectors; `at beginning`/`at end`/`at index` on `create`; qualified vs unqualified `clear` (the `@lang` form `l … (d@en)` is never shown); references; blocks/explicit atomicity. Line 1770 admits it is a "subset", but line 1780's "Every valid surface command MUST have an unambiguous expansion into one or several reference-language commands" never says which commands expand into *several* (only the embedded-initializer case at line 2409 appears to).
+
+**35. Line 2025's justification contradicts the stated design goals.** "the sense can be silently chosen from several entries with a form 'mami'" is precisely what design principle 4 (line 16) and short-syntax goal 5 (line 1795, "Never silently choose between several matching entries or senses") promise never happens. The `within` join is not in fact a silent choice, but the sentence as written licenses one, and it is the only rationale given for making paths `within`-based.
+
+**36. Typo-level defects in normative text.** `NOT_SUCH_META_LANGUAGE` / `NOT_SUCH_OBJECT_LANGUAGE` (line 104, should be `NO_SUCH_…`, and inconsistent with `NO_SUCH_TARGET` at line 1641); the final example at line 2474 has four opening parentheses and three closing ones; "the following will form" (line 1240, for "will fail"); two sections numbered 5.3.2.1 (lines 498 and 564); no section 5.4; §6 is `##` but its subsection is `####`; error codes are quoted inconsistently (`'X'` vs `` `X` ``); Part 3 restarts section numbering at 1, so cross-references such as "section 4.1" (line 1219) become ambiguous once a reader is in Part 3, which has its own §4 and §5.
+
+---
+
+# Part B — Suggestions on syntax and expressiveness
+
+## B.1 Structural changes that remove whole classes of ambiguity
+
+**1. Make the metamodel data, not prose.** Tables 4.1, 3 (parent/child), and 5.5 are the real normative core, and three of the contradictions above (findings 4, 19, 30) are drift between redundant copies. Publish the component/property model as a single machine-readable artifact (JSON/YAML) with fields `component, property, datatype, qualifier, required, identity-role`, generate the Markdown tables from it, and define validation as a function over it. Delete §4.4's two hand-maintained lists entirely — they are derivable.
+
+**2. Replace the §5.5 applicability table with two orthogonal tables.** One indexed by *property role* (identity / required / optional × scalar / multitext), one indexed by *command* × *clause position* (command target, `under`/`of`/`on` selector, `within` selector, initializer). The current table conflates them, which is why it is not a partition.
+
+**3. Introduce one path grammar shared by both syntaxes, with an explicit axis operator.** Today the same relation is written `of` in Part 2 and `/` in Part 3, and the `of`/`within` distinction is inexpressible in Part 3. Proposal:
+
+```
+entry[form@tww="mami"] / sense[gloss@en="pig"]      # strict parent  (= of / under)
+entry[form@tww="mami"] // sense[gloss@en="pig"]     # existential    (= within)
+```
+
+Part 2 keeps `of`/`within` as readable aliases if desired, but both syntaxes then share one resolution algorithm, and the short syntax gains strict-parent selection (finding 34) while `/` vs `//` documents which of the two semantics a line relies on.
+
+**4. Generalize `has-gloss` into a child-existence predicate and delete the pseudo-property.**
+
+```
+entry[form@tww="efe", has sense[gloss@en="door"]]
+entry[form@tww="mami", has sense[category="Verb", has example[...]]]
+```
+
+This subsumes `has-gloss` (finding 5 disappears), removes the arbitrary restriction to *gloss* of a *direct child sense*, and unifies with `within` — `A // B` becomes sugar for `B` selected under `A[has B]`. It also gives the short syntax a way to disambiguate homophones, which it currently lacks.
+
+**5. Make `index` a step suffix rather than a predicate.** `sense[gloss@en="pig"]#2` / `example#1`. Today `index` is a predicate that may never be combined with any other predicate (line 673) and needs a special `DUPLICATE_SELECTOR` carve-out; as a suffix the exclusion is structural. This also makes the short syntax's `x[1]` (line 2045) a regular case rather than a special one, and it leaves `[...]` uniformly meaning "predicates".
+
+**6. Add an explicit multiplicity keyword instead of making every command single-match.** Currently *no* command can affect more than one component, so "set `category` on every sense of this entry" or "delete all examples of this sense" is inexpressible — a significant gap for a bulk-editing language. Keep the never-silently-choose principle by requiring the plurality to be written:
+
+```
+set category = "Noun" on each sense[...] of entry[...]
+delete all example[...] under sense[...]
+```
+
+Unmarked commands keep exactly today's semantics (`AMBIGUOUS_REFERENCE` on >1).
+
+**7. Add labels/variables for created components** (finding 21):
+
+```
+create entry(form@tww = "mami") as $new
+create relation(type = "synonym", target = $new) under entry[form@tww = "memi"]
+```
+
+Scope them to the script (or to the enclosing block). This is the only way to reference a freshly created homophonous entry, and it also removes the need to re-select the same component in consecutive commands.
+
+**8. Give the language a normative error catalogue.** One table: code, condition, raising commands, static (validation-time) vs dynamic (execution-time). Adopt one naming convention and one code per condition — merging `ILLEGAL_PARENT`/`INCOMPATIBLE_DESTINATION`, `DUPLICATE_COMPONENT`/`CANNOT_CREATE_DUPLICATE`, and the three "not set" codes (findings 12, 17), and fixing `NOT_SUCH_*` and `NEGATIVE_HN`. Distinguishing static from dynamic errors also settles open questions such as finding 25 (`move entry`).
+
+**9. Put both grammars in the specification.** Line 1774 defers the short grammar to "a separate formal (BNF) grammar"; neither syntax currently has one. An EBNF for each, plus a worked ambiguity note for the two known hazards (the `move` source/destination boundary at line 860, and the value-selector/`on` boundary in §10), would let a reader verify the prose. Add a version pragma (`%liftpatch 1.0`) so scripts declare the language version they target.
+
+## B.2 Syntax-level improvements
+
+**10. Replace unqualified-`clear` special-casing with an explicit wildcard.** §5.6.3 has to state that the default language is "**not** applied to an unqualified `clear`" — the only place in the language where an omitted qualifier does not mean "the default". Write it instead as:
+
+```
+clear definition@en     # one language
+clear definition@*      # all languages
+```
+
+and make bare `clear definition` illegal for multitexts. The `@*` form can also serve selectors ("any language"), which the language currently cannot express.
+
+**11. Allow a multi-language literal.** Setting several languages currently requires one command per language:
+
+```
+set form = { tww: "mami", tpi: "pik" }
+create example(text = { tww: "a mami jefi", tpi: "mi shutim pik" })
+```
+
+Purely surface sugar over existing semantics, but it matches how lexicographers actually enter data.
+
+**12. Scope defaults lexically rather than positionally** (finding 23):
+
+```
+with object = "tww", meta = "en" {
+  ...
+}
+```
+
+Positional directives make scripts order-dependent and unsafe to concatenate or reorder; a block form makes the scope explicit and nestable. Keep `language-default` as the file-level fallback.
+
+**13. Richer selector predicates.** For a lexicographic corpus, exact string equality alone is limiting. Consider `!=`, `~` for regex/substring, and a case-insensitivity marker, at least in `within`/`has` positions where uniqueness is not being asserted. Also consider `exists(prop)` / `absent(prop)` — "the sense that has no category" is currently inexpressible.
+
+**14. Relative positioning in `move` and `create`.** `at index n` is absolute and breaks as soon as the sibling list changes. Add:
+
+```
+move example[...] under sense[...] before example[text@tww = "..."]
+move example[...] under sense[...] after #2
+```
+
+Also make `at` optional with a documented default (`at end`), and extend `at` to `upsert`, `ensure` and embedded initializers (finding 26).
+
+**15. Reconsider the eight-verb surface.** `create` / `upsert` / `ensure` and `set` / `update` are two families differing only in their existence precondition. An orthogonal design would be verb × mode:
+
+```
+create sense(...)                # fail if exists
+create sense(...) if-missing     # = upsert
+set category = "Noun" if-present # = update
+```
+
+This is a larger change and may not be worth it, but if kept as-is, the spec should at least present the five in a single precondition/postcondition matrix (exists → action, missing → action) rather than in five separate prose sections; that matrix is what surfaced finding 1.
+
+**16. Harden LiftPatchShort's lexical layer.** Require a stricter recognition rule than "single letter + whitespace" — e.g. the second token must begin with `/` or with a component letter followed by `(` or `[` — and consider an optional line prefix sigil for documents where false positives matter. Specify the unquoted-word character class positively (`[A-Za-z0-9_-]+`, everything else must be quoted) rather than as a forbidden set (finding 32), which resolves the `@` collision with the language suffix.
+
+**17. Revisit the single-letter code space.** It is already saturated and several assignments are hard to remember (`o` = Translation, `l` = Reversal, `p` = Upsert vs `p` = Pronunciation, `a` = Annotation vs `a` = `target`). Since components and properties are always distinguishable by position, the collisions are formally fine — but state the disambiguation rule normatively instead of asserting "The context always allows to disambiguate" (line 1835), and allow optional multi-letter aliases (`tr`, `rev`, `pron`) so scripts can be written readably and the code space can grow.
+
+**18. Define a dry-run / plan mode.** For a mutation language operating on irreplaceable linguistic data, a normative "what would change" output (per command: resolved target path, created/modified/removed properties) is arguably more valuable than any additional syntax. It also gives implementers a testable, comparable artifact.
+
+---
+
+If it would help, I can turn Part A into a numbered issue list in `TODO.md` with the proposed resolution for each, or draft the corrected §5.5 table and the error catalogue as concrete replacement text.
+
+
+---
+
+
+
+
+
+You mentioned the following improvments to the specification of the domain specific language contained in the file specification.md:
+
+<<<<<
+
+B.2 Syntax-level improvements
+
+**10. Replace unqualified-`clear` special-casing with an explicit wildcard.** §5.6.3 has to state that the default language is "**not** applied to an unqualified `clear`" — the only place in the language where an omitted qualifier does not mean "the default". Write it instead as:
+
+```
+clear definition@en     # one language
+clear definition@*      # all languages
+```
+
+and make bare `clear definition` illegal for multitexts. The `@*` form can also serve selectors ("any language"), which the language currently cannot express.
+
+**11. Allow a multi-language literal.** Setting several languages currently requires one command per language:
+
+```
+set form = { tww: "mami", tpi: "pik" }
+create example(text = { tww: "a mami jefi", tpi: "mi shutim pik" })
+```
+
+Purely surface sugar over existing semantics, but it matches how lexicographers actually enter data.
+
+**12. Scope defaults lexically rather than positionally** (finding 23):
+
+```
+with object = "tww", meta = "en" {
+  ...
+}
+```
+
+Positional directives make scripts order-dependent and unsafe to concatenate or reorder; a block form makes the scope explicit and nestable. Keep `language-default` as the file-level fallback.
+
+**13. Richer selector predicates.** For a lexicographic corpus, exact string equality alone is limiting. Consider `!=`, `~` for regex/substring, and a case-insensitivity marker, at least in `within`/`has` positions where uniqueness is not being asserted. Also consider `exists(prop)` / `absent(prop)` — "the sense that has no category" is currently inexpressible.
+
+**14. Relative positioning in `move` and `create`.** `at index n` is absolute and breaks as soon as the sibling list changes. Add:
+
+```
+move example[...] under sense[...] before example[text@tww = "..."]
+move example[...] under sense[...] after #2
+```
+
+Also make `at` optional with a documented default (`at end`), and extend `at` to `upsert`, `ensure` and embedded initializers (finding 26).
+
+**15. Reconsider the eight-verb surface.** `create` / `upsert` / `ensure` and `set` / `update` are two families differing only in their existence precondition. An orthogonal design would be verb × mode:
+
+```
+create sense(...)                # fail if exists
+create sense(...) if-missing     # = upsert
+set category = "Noun" if-present # = update
+```
+
+This is a larger change and may not be worth it, but if kept as-is, the spec should at least present the five in a single precondition/postcondition matrix (exists → action, missing → action) rather than in five separate prose sections; that matrix is what surfaced finding 1.
+
+**16. Harden LiftPatchShort's lexical layer.** Require a stricter recognition rule than "single letter + whitespace" — e.g. the second token must begin with `/` or with a component letter followed by `(` or `[` — and consider an optional line prefix sigil for documents where false positives matter. Specify the unquoted-word character class positively (`[A-Za-z0-9_-]+`, everything else must be quoted) rather than as a forbidden set (finding 32), which resolves the `@` collision with the language suffix.
+
+**17. Revisit the single-letter code space.** It is already saturated and several assignments are hard to remember (`o` = Translation, `l` = Reversal, `p` = Upsert vs `p` = Pronunciation, `a` = Annotation vs `a` = `target`). Since components and properties are always distinguishable by position, the collisions are formally fine — but state the disambiguation rule normatively instead of asserting "The context always allows to disambiguate" (line 1835), and allow optional multi-letter aliases (`tr`, `rev`, `pron`) so scripts can be written readably and the code space can grow.
+
+**18. Define a dry-run / plan mode.** For a mutation language operating on irreplaceable linguistic data, a normative "what would change" output (per command: resolved target path, created/modified/removed properties) is arguably more valuable than any additional syntax. It also gives implementers a testable, comparable artifact.
+
+
+>>>>>
+
+I answered : <<<<<
+please implement all your suggestion in the specification. regarding N°2: keep the old table with "deprecated" on the top; regarding n°3: please do keep of and within as readable aliases. Otherwise, please implement all these suggestions.
+
+>>>>>
+
+Please could you complete the implementation of the improvements?
+
+Could you correct the specification taking into account the following answers to your questions. Regarding 1: Yes, ensure is assertion, not idempotent. Change the document accordingly. Regarding question 2: since `ensure` is assertion only, it requires square brackets. Please correct the document accordingly. Regarding question n°3. Yes the example is incorrect. Please change it using clear on the definition of a sense. 4. comment is multitext. Please add it in the list in 4.4's multitext list. Please add value, when, who in 4.4's scalar list. 5. change 'ILLEGAL_USE_OF_HAS_GLOSS' into 'COMMAND_NOT_ALLOWING_HAS_GLOSS'. 6. For upsert, a not-existing hn should also raise HN_NOT_EXISTING. However, it means that when `hn` is present, upsert can only select, not execute the create branch. Then, hn should be forbidden with upsert. It makes no sense to create an example "if it is the second": either you know it is the second (and you know that it exist) or you don't know it index. 7. You're correct: add "forbidden in within" in the "index" row, "on parent selector (in `under`, `on`, `within` clause)" column of the  applicability table . Regarding 8: I disagree, it is correct to have under after the direct target of the command. 9. Please add a clarification: an of (or under, or on) clause followed by within does not really change its signifcation, it is rather that it is the result of the whole within chain that must be unambiguous. With parentheses, it could be said: "of ( X within Y)": the result of the parentheses should not ambiguous. Please states this rules correctly. 10: Please add inline comment after the rule line 41. 11 please add blocks to the enumeration (l. 37-41) of what a reference script may contain. 12. change INCOMPATIBLE_DESTINATION for ILLEGAL_PARENT and change DUPLICATE_COMPONENT to CANNOT_CREATE_DUPLICATE. 13. Please add to the command syntax section ni Part 3 §3 the case of "c <short-syntax-path>" (path ending with entry form or with sense gloss) as shortcut for "c e('form')" and 'c /e[f="form"] e(g="gloss")' 14. Please add the missing strategy to line 356-368. 15. change the example with 'sense[category="Noun"]' and add to the algorithm that the within chain, once resolved to a single example, is provided to "of transation" for a resolution according to the "of" rule. 16. required property cannot be cleared, and the table row "Required non-identity property / clear"should  says "only if another value remains (for multitext); yes (for a scalar). 17: give the decision table with a distinct error code for each case and replace the other errors code mentionned by the new appropriate one. 18. add "qualified" in "if the property was not already set. Then "update definition@en" should raise an error if en sub-entry does not exist, even if a fr sub-entry exist. 19. Please create the correct and deterministic-proof tables for the 5.5 applicability table; however keep the existing table with the title "supersedes by the following table -- to be deleted later)". 20. NEGATIVE_HN should be "ILLEGAL_HN". Please find the best deterministic solution to the problem you mention, taking into account that hn is just an arbibrary number assigned by the dictionary on homophone and that we have no control on its stability, etc. 21. You are correct. The solution you offer below will correct this. 22. Please make explicit that a file script roll back and make no change as long as a single command fail, for both syntax. 23. Please offer a better language management. Maybe state that language-default directive in a block has the scope of the block, that language-create make this new language the default, if it is clear enough. 24. index give position amongst same-type sibling. add the precision where it is not mentioned. move entry is a parse error: correct accordingly. "at POSITION" is mandatory. 26 make "at POSITION" available optionaly for upsert, ensure, embedded initializers and command inside a block. State that when "at POSITION" is not given, the created component is created at the last position "at end". 27: state formally that upsert has two branches and explain that some selector (hn and has-gloss) are possible because of the existence of a select branch, but will not be use with set semantic in the create branch. 28 Please defined identity correctly so that entry does not have to be excepted repeatedly. 29. state that the value chain can be any valid value chain (including within), that a bare string is not legal (in that case, "set target = entry[ID = "entry-id"]" should be use -- please tell me in you answer if that makes sense), please suggest a syntax for LiftPatchShort -- maybe with a path: (target = /entry[ID="entry-id"]) ? Please add Reversal in the enumeration line 1644. 30 Please complete the parent/child table with Trait, Illustration and Media; add Annotation and Field as child for this three new rows. 31 cross language matching is excluded: the phrasing line 206 should be "any of its same-language values can be used for the natural identity, not all its values" 438 is correct: two sibling senses can coexist as long as they do not have the same value for the *qualified* gloss property 32 yes, include @, ",", "=" and "#" in the list. Comment is not needed in short syntax since the commands can be mixed with non-command line anyway. in a unnamed-argument constructor, every multitext argument can have a @lang. Please add this explanation. line 2008, change selectors to predicates. 33 please suggest a more robust command line recognition, without breaking the intended concisness of the syntax. 34. Yes, the short syntax is only a subset. Correct line 1780: remove the "or several" and make the following "commands" word singular. 35 please change the sentence "the sense can be silently chosen from several entries with a form 'mami'" into "the sens is selected out of the set of entries with a form 'mami'", removing the incorrect and contradictory statement that it is "silently chosen". 36 Please correct this typo. Regarding all the suggestions you made in your answer under "Part B" : please implement all your suggestion in the specification. regarding N°2: keep the old table with "deprecated" on the top; regarding n°3: please do keep of and within as readable aliases. Otherwise, please implement all these suggestions.

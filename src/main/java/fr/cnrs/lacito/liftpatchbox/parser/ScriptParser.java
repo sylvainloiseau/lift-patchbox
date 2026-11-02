@@ -37,7 +37,7 @@ public final class ScriptParser {
     private static final Logger LOGGER = Logger.getLogger(ScriptParser.class.getName());
 
     /** The language version this implementation supports. */
-    public static final String SUPPORTED_VERSION = "1.0";
+    public static final String SUPPORTED_VERSION = "1.1";
 
     private final Metamodel metamodel;
 
@@ -77,7 +77,7 @@ public final class ScriptParser {
                 ErrorCode.SYNTAX_ERROR,
                 "the surface syntax of " + source + " is not declared by a pragma and was not "
                     + "given; pass --syntax, use a .liftpatch or .liftpatchs extension, or write "
-                    + "%liftpatch 1.0 syntax=\"LiftPatchRef\"",
+                    + "%liftpatch 1.1 syntax=\"LiftPatchRef\"",
                 SourcePosition.UNKNOWN));
         }
         LOGGER.log(Level.FINE, () ->
@@ -183,7 +183,7 @@ public final class ScriptParser {
                 && !name.equals(Pragma.SYNTAX)) {
                 throw new LiftPatchException(LiftPatchError.of(
                     ErrorCode.UNKNOWN_PRAGMA_ATTRIBUTE,
-                    "the version pragma of LiftPatch 1.0 carries `sigil`, `metamodel` and "
+                    "the version pragma of LiftPatch 1.1 carries `sigil`, `metamodel` and "
                         + "`syntax`, and no other attribute; found `" + name + "`",
                     pragma.position()));
             }

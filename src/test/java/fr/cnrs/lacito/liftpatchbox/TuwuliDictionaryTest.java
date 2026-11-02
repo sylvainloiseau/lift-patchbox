@@ -151,6 +151,8 @@ class TuwuliDictionaryTest {
                 .map(g -> g.getGramInfoValue()).filter(f -> f != null)
                 .findFirst().orElseThrow();
             String id = pos.getId();
+            boolean declared = pos.isDeclared();
+            boolean setDeclared = pos.getParentFeatureSet().isDeclared();
             Plan plan = box().plan(shared,
                 "feature-rename \"" + id + "\" in \"grammatical-info\" to \"liftpatchbox-test\"",
                 Syntax.REFERENCE, "<tww>");
@@ -158,6 +160,8 @@ class TuwuliDictionaryTest {
             assertEquals(1, plan.allEffects().size());
             assertEquals(1, plan.summary().declarationsRenamed());
             assertEquals(id, pos.getId(), "plan mode leaves the dictionary as it was");
+            assertEquals(declared, pos.isDeclared(), "and the value as declared as it was");
+            assertEquals(setDeclared, pos.getParentFeatureSet().isDeclared());
         }
 
         @Test
@@ -211,6 +215,33 @@ class TuwuliDictionaryTest {
         }
 
         @Test
+        @DisplayName("declares in the header only the value a script names")
+        void declaresOnlyWhatTheScriptNames(@TempDir Path directory) throws Exception {
+            LiftDictionary dictionary = TuwuliDictionary.load();
+            Path unchanged = directory.resolve("unchanged.lift");
+            dictionary.save(unchanged.toFile());
+
+            Plan plan = box().apply(dictionary,
+                "c /e[f=\"" + form(anEntryWithASense(dictionary)) + "\"] "
+                    + "n(\"liftpatchbox-type\", \"a note of a new type\")",
+                Syntax.CONCISE, "<tww>");
+            assertTrue(plan.isOk(), () -> String.valueOf(plan.error()));
+            Path patched = directory.resolve("patched.lift");
+            dictionary.save(patched.toFile());
+
+            List<String> before = headerLines(unchanged);
+            List<String> after = headerLines(patched);
+            List<String> added = new java.util.ArrayList<>(after);
+            before.forEach(added::remove);
+            List<String> removed = new java.util.ArrayList<>(before);
+            after.forEach(removed::remove);
+            assertEquals(List.of(), removed, "the header loses nothing");
+            assertFalse(added.isEmpty());
+            assertEquals(List.of("<range-element id=\"liftpatchbox-type\">", "</range-element>"), added,
+                "the header gains only the new note type");
+        }
+
+        @Test
         @DisplayName("leaves the dictionary unchanged when a later command fails")
         void leavesTheDictionaryUnchanged() throws Exception {
             LiftDictionary dictionary = TuwuliDictionary.load();
@@ -259,7 +290,11 @@ class TuwuliDictionaryTest {
      * search is explicit rather than taking the first entry it finds.
      */
     private static LiftEntry anEntryWithASense() {
-        return unambiguousEntries(shared).stream()
+        return anEntryWithASense(shared);
+    }
+
+    private static LiftEntry anEntryWithASense(LiftDictionary dictionary) {
+        return unambiguousEntries(dictionary).stream()
             .filter(e -> !e.getSenses().isEmpty())
             .filter(e -> e.getSenses().get(0).getGlosses().containsLang("en"))
             .findFirst().orElseThrow();
@@ -278,6 +313,15 @@ class TuwuliDictionaryTest {
 
     private static Optional<String> variantForm(LiftVariant variant) {
         return variant.getForms().getForm("tww").map(Form::toPlainText);
+    }
+
+    /** The tags of the header of a saved dictionary, one per item, trimmed. */
+    private static List<String> headerLines(Path file) throws Exception {
+        String text = Files.readString(file);
+        int start = text.indexOf("<header");
+        int end = text.indexOf("</header>");
+        return java.util.Arrays.stream(text.substring(start, end).split("(?<=>)"))
+            .map(String::trim).filter(t -> !t.isEmpty()).toList();
     }
 
     private static String gloss(LiftSense sense) {

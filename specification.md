@@ -1,7 +1,7 @@
 ---
 Author: Sylvain Loiseau
-Last edit: 2026/09/13
-Version: 1.0
+Last edit: 2026/10/31
+Version: 1.1
 Title: "LiftPatch: a mutation language for the LIFT data model"
 ---
 
@@ -37,7 +37,7 @@ that are attached to the components, such as the `form` (on an `entry` component
 A script MAY declare the version of the language it targets with a version pragma:
 
 ```text
-%liftpatch 1.0
+%liftpatch 1.1
 ```
 
 When present, the pragma MUST appear **before the first command** of the script.
@@ -46,19 +46,19 @@ lines may precede it, so that a field-note file may open with a title.
 
 A pragma that declares a `sigil` (see below) MUST be the first non-blank line of the document, because the sigil is what decides which lines are commands at all, and that decision cannot depend on a pragma that only a command-aware scan would find.
 
-The pragma has the same form in both surface syntaxes. A script without a pragma is processed as `1.0`. An implementation that does not support the declared version MUST reject the script with `UNSUPPORTED_LANGUAGE_VERSION`.
+The pragma has the same form in both surface syntaxes. A script without a pragma is processed as `1.1`. An implementation that does not support the declared version MUST reject the script with `UNSUPPORTED_LANGUAGE_VERSION`.
 
 The pragma may carry named attributes after the version number, written
-`name="value"` and separated by whitespace. Three are defined in version 1.0:
+`name="value"` and separated by whitespace. Three are defined in version 1.1:
 
 - `sigil`, meaningful in LiftPatchShort documents only, which declares the line prefix that marks a command (Part 3, section "1.1");
 - `metamodel`, which names the metamodel the script requires (Appendix A). When it is present and does not name the metamodel the implementation has loaded, the script is rejected with `UNSUPPORTED_METAMODEL`. When it is absent, the script is validated against the metamodel of Appendix A;
 - `syntax`, whose value is `"LiftPatchRef"` or `"LiftPatchShort"`, which declares which of the two surface syntaxes the script is written in. When it is present, the implementation MUST parse the script with the declared syntax; when it is absent, the implementation determines the syntax by other means (a file extension, a command-line option), and the value it used MUST be reported in the plan document (section "12.4.1").
 
 ```text
-%liftpatch 1.0 sigil=">"
-%liftpatch 1.0 metamodel="tww-project-2"
-%liftpatch 1.0 syntax="LiftPatchShort"
+%liftpatch 1.1 sigil=">"
+%liftpatch 1.1 metamodel="tww-project-2"
+%liftpatch 1.1 syntax="LiftPatchShort"
 ```
 
 An unknown attribute is rejected with `UNKNOWN_PRAGMA_ATTRIBUTE`.
@@ -88,7 +88,7 @@ LiftPatch reference commands are contained in a script file, "Lift patch referen
 - commands that start on their own line with one of the eight verbs (set, upsert, update, clear, delete, ensure, create, move).
 - *block headers*, together with their opening `{` and their closing `}` line (see section "11").
 - directives: the language directives `language-default`, `language-create` and `language-delete`, the `with` block (see section "2.1"), and the declaration directives that manage the feature sets, the features and the field and trait definitions of the dictionary (sections "2.1.4" and "2.1.5").
-- the optional version pragma `%liftpatch 1.0` (see section "1.1").
+- the optional version pragma `%liftpatch 1.1` (see section "1.1").
 - comments. A comment starts with an unquoted `#` and runs to the end of the physical line. A comment may occupy a whole line, or follow a command on the same line (*inline comment*). A `#` occurring inside a quoted string is an ordinary character, not a comment marker.
 
 2/ The second syntax, the *LiftPatch short language* (short: *LiftPatchShort*) is more concise.
@@ -101,14 +101,14 @@ LiftPatchShort commands are:
 
 - lines starting with optional whitespace followed by one of the single-letter command abbreviations, followed by whitespace and by a second token of a constrained shape. The recognition rule is normative and is given in Part 3, section "1.1"; a one-letter prefix alone is deliberately *not* sufficient, so that ordinary prose beginning with "c " or "s " is not mistaken for a command.
 - the directives of Part 1, sections "2.1.1" and "2.1.3" to "2.1.5", written exactly as in the reference syntax: `language-default`, `language-create`, `language-delete` and the declaration directives.
-- the optional version pragma `%liftpatch 1.0`, anywhere before the first command line of the document (section "1.1"). A pragma declaring a `sigil` is the one exception: it must be the first non-blank line.
+- the optional version pragma `%liftpatch 1.1`, anywhere before the first command line of the document (section "1.1"). A pragma declaring a `sigil` is the one exception: it must be the first non-blank line.
 
 In both syntaxes, strings are quoted by single or double quotes. The escaping
 rules are the following, and they are exhaustive:
 
 - in a **double-quoted** string, `\"` is a double quote and `\\` is a backslash. These two are the only escape sequences: any other character following a backslash is an error (`SYNTAX_ERROR`), so that no sequence is silently reinterpreted later;
 - in a **single-quoted** string, `''` is a single quote and a backslash is an ordinary character with no escaping role;
-- a raw line break is forbidden inside a string in both syntaxes; there is no escape for it in version 1.0, and a value containing a line break cannot be written. (LiftPatchRef allows a command to span several physical lines, but not a string.)
+- a raw line break is forbidden inside a string in both syntaxes; there is no escape for it in version 1.1, and a value containing a line break cannot be written. (LiftPatchRef allows a command to span several physical lines, but not a string.)
 
 The `sigil` pragma attribute (section "1.1") is meaningful in LiftPatchShort
 documents only. In a LiftPatchRef script it is accepted and **ignored**: it is
@@ -309,6 +309,23 @@ types of the components and the parts of speech.
 | `annotation-type` | the `type` of an `annotation` |
 | `etymology` | the `type` of an `etymology` |
 
+**Declared and undeclared values.** A dictionary file need not declare all of
+them. A built-in feature set the file has no range for is **undeclared**, and so
+is a value a component uses but its feature set does not list (a note `type`, a
+part of speech, the value of an option trait). The dictionary keeps such sets and
+values so that its components can use them, but does not write them in the header
+when it is saved. Declaring one adds it to the header. A value or a set is declared
+by the directives below, and by a command that names it (see "Commands declare
+features", below).
+
+**External feature sets.** A feature set may be defined in an **external** ranges
+file, a `.lift-ranges` file the dictionary refers to. That file is not written when
+the dictionary is saved, so an external feature set is read-only: no directive may
+create, delete or rename its features or rename it, and no command may add a value
+to it. Each of these raises `DECLARATION_IS_EXTERNAL`. Its values can still be used,
+as the `type` of a component or the value of a trait, and the set can be deleted
+under the conditions of `feature-set-delete`.
+
 Six directives manage the feature sets and their features. Names are quoted
 strings, since feature ids routinely contain spaces (`"Dialectal Variant"`,
 `"1.5 Plant"`); `in` names the feature set of a feature, and `to` the new name:
@@ -325,10 +342,10 @@ feature-set-delete "variant-kind"
 
 - `feature-set-create "s"` declares an empty feature set. `DECLARATION_ALREADY_EXISTS` if `s` exists.
 - `feature-set-delete "s"` removes the feature set with its features. `NO_SUCH_DECLARATION` if `s` does not exist; `DECLARATION_IS_BUILT_IN` for a built-in feature set; `DECLARATION_IN_USE` if a trait definition takes `s` as its `range`, or if one of its features is in use (below). What the feature set holds itself — the hierarchy of its features, the traits of its features — goes with it and does not count as a use.
-- `feature-set-rename "s" to "t"` changes the id of a feature set. `NO_SUCH_DECLARATION`; `DECLARATION_IS_BUILT_IN`; `DECLARATION_ALREADY_EXISTS` if `t` exists; and `DECLARATION_IS_EXTERNAL` if `s` is defined in an external ranges file (a `.lift-ranges` file the dictionary refers to) that was not read with the dictionary: that file is not rewritten when the dictionary is saved, and would go on naming the set `s`. The definitions taking `s` as their `range` follow the rename.
-- `feature-create "f" in "s"` adds a feature to a feature set. `NO_SUCH_DECLARATION` if `s` does not exist; `DECLARATION_ALREADY_EXISTS` if `s` has a feature `f`.
-- `feature-delete "f" in "s"` removes a feature. `NO_SUCH_DECLARATION` if `s` or `f` does not exist. `DECLARATION_IN_USE` while anything uses the feature: the `type` of a note, a relation, an annotation, an etymology, a reversal or a translation; the `value` of a category; the value of an option trait; or being the superordinate of another feature, in a feature set's hierarchy. Uses held by the header count as well as those of the entries: a trait on a feature, for instance.
-- `feature-rename "f" in "s" to "g"` changes the id of a feature. `NO_SUCH_DECLARATION` if `s` or `f` does not exist; `DECLARATION_ALREADY_EXISTS` if `s` has a feature `g`.
+- `feature-set-rename "s" to "t"` changes the id of a feature set. `NO_SUCH_DECLARATION`; `DECLARATION_IS_BUILT_IN`; `DECLARATION_ALREADY_EXISTS` if `t` exists; and `DECLARATION_IS_EXTERNAL` if `s` is external: its ranges file would go on naming it `s`. The definitions taking `s` as their `range` follow the rename.
+- `feature-create "f" in "s"` adds a feature to a feature set, or declares `f` if `s` already holds it undeclared. If `s` is an undeclared built-in feature set, `s` is declared as well. `NO_SUCH_DECLARATION` if `s` does not exist; `DECLARATION_ALREADY_EXISTS` if `s` already declares `f`; `DECLARATION_IS_EXTERNAL` if `s` is external.
+- `feature-delete "f" in "s"` removes a feature. `NO_SUCH_DECLARATION` if `s` or `f` does not exist; `DECLARATION_IS_EXTERNAL` if `s` is external. `DECLARATION_IN_USE` while anything uses the feature: the `type` of a note, a relation, an annotation, an etymology, a reversal or a translation; the `value` of a category; the value of an option trait; or being the superordinate of another feature, in a feature set's hierarchy. Uses held by the header count as well as those of the entries: a trait on a feature, for instance.
+- `feature-rename "f" in "s" to "g"` changes the id of a feature. If `f` is undeclared, it is declared first, since renaming it changes the header. `NO_SUCH_DECLARATION` if `s` or `f` does not exist; `DECLARATION_ALREADY_EXISTS` if `s` has a feature `g`; `DECLARATION_IS_EXTERNAL` if `s` is external.
 
 A name is never blank: `feature-create "" in "s"` is a `SYNTAX_ERROR`, as is a
 blank name in any directive of this section and of section "2.1.5".
@@ -345,10 +362,20 @@ set text@en = "checked" on note^editorial of entry[form@tww = "mami", hn = 1]
 The rename reports one effect, not one per component that now reads the new name,
 by the rule that the effect list describes what the script did (section "12.4.1").
 
-**Commands still declare features.** A command naming a type or a part of speech
-that is not declared declares it: `create note(type = "draft", text@en = "…")` adds
-`draft` to `note-type`. These directives add the explicit management of the header;
-they do not make declaring a feature before using it mandatory.
+**Commands declare features.** A command that names a value its feature set does
+not declare declares it: a `type`, a part of speech, or a value of an option trait.
+`create note(type = "draft", text@en = "…")` adds `draft` to `note-type`. This holds
+both for a value new to the dictionary and for one its components already use
+undeclared. An undeclared built-in feature set is declared together with the first
+value declared in it. Only the values a script names are declared; the other
+undeclared values of the set stay undeclared. In an external feature set, a command
+may use a value the set holds, but a new value raises `DECLARATION_IS_EXTERNAL`. The
+directives above add explicit management of the header; they do not make it
+mandatory to declare a feature before using it.
+
+Declarations, explicit or implicit, belong to the script's transaction: a script
+that fails leaves every set and value exactly as declared or undeclared as it found
+it (section "12.2").
 
 ### 2.1.5 Declaring fields and traits
 
@@ -356,7 +383,11 @@ A `field` or a `trait` (section "3") is typed by a **definition** the header
 declares under its `type`, and the definition gives the *data model* of its values.
 A command creating a field or a trait whose type is not declared declares it, with
 the default data model of its kind; to choose the data model, declare the
-definition first:
+definition first. A trait type that names no definition but names a feature set
+refers to that set: its values are features of the set, and no definition is
+declared (`create trait(type = "dialects", value = "north") under entry[form@tww = "mami", hn = 1]` takes `north` from the
+feature set `dialects`). A definition of the same name, if one is declared, takes
+precedence over the feature set:
 
 ```LiftPatchRef
 field-create "editorial"
@@ -3163,7 +3194,7 @@ errors; it is not guaranteed to succeed later, since the dictionary may have
 changed in between.
 
 Plan mode MUST also report **warnings**, which are not errors and do not prevent
-the script from being applied. Two are defined in version 1.0:
+the script from being applied. Two are defined in version 1.1:
 
 - `NO_COMMAND_RECOGNIZED` — not one line of the document was recognized as a command. In LiftPatchShort this is almost always a misdetected syntax: a LiftPatchRef script read as a LiftPatchShort document matches no command line and would otherwise apply nothing, silently (section "1.1"). Declaring `syntax=` on the pragma prevents the situation; the warning catches it when nobody did;
 - `COMMAND_APPLIES_TO_NO_COMPONENT` — a command marked `each`, `all` or `*` whose target step matched nothing. It changes nothing by design (section "5.6"), and a plan that says so is how an editor learns that the cleanup line they wrote matches none of the data they thought it did.
@@ -3366,7 +3397,7 @@ feature-create "Dialectal Variant" in "variant-type"
 trait-create "variant-type" model = option range = "variant-type"
 ```
 
-3. the version pragma `%liftpatch 1.0`, anywhere before the first command line of the document; a pragma declaring a `sigil` must be the first non-blank line (section "1.1").
+3. the version pragma `%liftpatch 1.1`, anywhere before the first command line of the document; a pragma declaring a `sigil` must be the first non-blank line (section "1.1").
 
 Every command has a second token of one of the five shapes of rule 1: `c` and
 `p` take either a path or a constructor; `s`, `u` and `l` take a path; `d`, `e`
@@ -3404,7 +3435,7 @@ of section "2" irrelevant to the question "is this line a command", and it lets 
 lexicographer write about pigs in a file that also creates them:
 
 ```LiftPatchShort
-%liftpatch 1.0 sigil=">"
+%liftpatch 1.1 sigil=">"
 ```
 
 - The sigil is one character, declared on the pragma line, which must then be the first non-blank line of the document.
@@ -4934,7 +4965,7 @@ implementation MAY therefore load an **extended metamodel**, a JSON document of
 the same shape with additional entries, under three conditions:
 
 1. It MUST NOT remove or redefine anything this appendix declares: an extension adds component types, adds properties to existing component types, and adds children to existing component types. Changing the datatype, the `required` flag or the `naturalIdentity` of anything declared here produces a different language, not an extension of this one.
-2. The extended document MUST carry `"extends": "1.0"` and its own identifier in `"metamodelId"`, and a script MAY require it with a pragma attribute: `%liftpatch 1.0 metamodel="tww-project-2"`. If the required metamodel is not the one loaded, the script is rejected with `UNSUPPORTED_METAMODEL`.
+2. The extended document MUST carry `"extends": "1.0"` and its own identifier in `"metamodelId"`, and a script MAY require it with a pragma attribute: `%liftpatch 1.1 metamodel="tww-project-2"`. If the required metamodel is not the one loaded, the script is rejected with `UNSUPPORTED_METAMODEL`.
 3. Every rule of this specification is stated in terms of the metamodel, never in terms of the particular types listed below — with the single exception of `entry`, whose special status (no parent, empty natural identity, dictionary-ordered list, `hn` and `has-gloss`) is part of the language. An extension therefore needs no change to Parts 1 to 3. An added component type MUST declare a `componentKind`, and MUST satisfy the two invariants stated in the reading rules below; an extension may not change the `componentKind` of a type declared here.
 
 ```json
@@ -5227,7 +5258,7 @@ in particular:
 | `NO_SUCH_DECLARATION` | a declaration directive names a feature set, a feature or a definition the dictionary does not declare, or a definition of the other kind | 2.1.4, 2.1.5 |
 | `DECLARATION_IN_USE` | a feature set, a feature or a definition still in use would be deleted | 2.1.4, 2.1.5 |
 | `DECLARATION_IS_BUILT_IN` | one of the seven built-in feature sets would be deleted or renamed | 2.1.4 |
-| `DECLARATION_IS_EXTERNAL` | a feature set defined in an external ranges file that was not read would be renamed | 2.1.4 |
+| `DECLARATION_IS_EXTERNAL` | a feature set defined in an external ranges file would be renamed, or a feature of it created, deleted or renamed, or a command would add a value to it | 2.1.4 |
 
 ### B.3 Codes that must not be raised
 
@@ -5497,7 +5528,7 @@ Eleven further constraints are not expressed by the grammar and are static error
 A specification of this size cannot be checked by reading. This appendix defines
 a **conformance corpus**: a machine-readable set of cases, each giving a
 dictionary, a script, and the expected outcome. An implementation claims
-conformance to LiftPatch 1.0 by passing every case of the corpus.
+conformance to LiftPatch 1.1 by passing every case of the corpus.
 
 The corpus has a second purpose, internal to this document: every example
 written in Parts 1 to 3 is meant to be a legal script with a stated outcome, and
@@ -6343,7 +6374,13 @@ implementation MAY add cases; it MUST pass these.
     "description": "a language bound as the default in scope counts as used: language-create binds it",
     "dictionary": "standard",
     "script": "language-create object = \"hui\"\nlanguage-delete object = \"hui\"",
-    "expect": { "status": "error", "code": "LANGUAGE_IN_USE", "kind": "dynamic", "commandIndex": 2 } }
+    "expect": { "status": "error", "code": "LANGUAGE_IN_USE", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-106", "section": "2.1.4", "syntax": "LiftPatchRef",
+    "description": "a value the dictionary uses but its feature set does not declare is declared, once",
+    "dictionary": "standard",
+    "script": "feature-create \"Noun\" in \"grammatical-info\"\nfeature-create \"Noun\" in \"grammatical-info\"",
+    "expect": { "status": "error", "code": "DECLARATION_ALREADY_EXISTS", "kind": "dynamic", "commandIndex": 2 } }
 ]
 ```
 
@@ -6357,7 +6394,7 @@ Three rules keep this appendix honest:
 
 1. **Every normative example of Parts 1 to 3 SHOULD appear in the corpus**, with its stated outcome. An example that no case covers is an example nobody has checked.
 2. **A change to this specification that changes an outcome MUST change the corpus in the same edit.** The corpus is the part of this document that can be run, and it is therefore the part that decides, in practice, what the language is.
-3. **Every code of Appendix B SHOULD be raised by at least one case**, and every warning of B.4 reported by at least one. A code that no case exercises is a code against which no implementation has ever been checked, and it is usually a code that turns out to name a condition another code already names. The corpus of version 1.0 does not yet reach every code; extending it is the first thing to do to it.
+3. **Every code of Appendix B SHOULD be raised by at least one case**, and every warning of B.4 reported by at least one. A code that no case exercises is a code against which no implementation has ever been checked, and it is usually a code that turns out to name a condition another code already names. The corpus of version 1.1 does not yet reach every code; extending it is the first thing to do to it.
 
 An implementation reports its corpus result as a table of `id` and pass/fail,
 and a conformance claim cites the corpus version it passed.

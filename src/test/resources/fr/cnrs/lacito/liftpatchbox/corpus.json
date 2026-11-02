@@ -729,5 +729,11 @@
     "description": "a language bound as the default in scope counts as used: language-create binds it",
     "dictionary": "standard",
     "script": "language-create object = \"hui\"\nlanguage-delete object = \"hui\"",
-    "expect": { "status": "error", "code": "LANGUAGE_IN_USE", "kind": "dynamic", "commandIndex": 2 } }
+    "expect": { "status": "error", "code": "LANGUAGE_IN_USE", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-106", "section": "2.1.4", "syntax": "LiftPatchRef",
+    "description": "a value the dictionary uses but its feature set does not declare is declared, once",
+    "dictionary": "standard",
+    "script": "feature-create \"Noun\" in \"grammatical-info\"\nfeature-create \"Noun\" in \"grammatical-info\"",
+    "expect": { "status": "error", "code": "DECLARATION_ALREADY_EXISTS", "kind": "dynamic", "commandIndex": 2 } }
 ]

@@ -4,16 +4,16 @@ import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
 import java.util.Map;
 
 /**
- * The optional version pragma {@code %liftpatch 1.0} and its named attributes
+ * The optional version pragma {@code %liftpatch 1.1} and its named attributes
  * (Part 1, section 1.1).
  *
- * <p>Three attributes are defined in version 1.0: {@code sigil}, which declares
+ * <p>Three attributes are defined in version 1.1: {@code sigil}, which declares
  * the line prefix that marks a command in a concise document; {@code metamodel},
  * which names the metamodel the script requires; and {@code syntax}, which
  * declares which of the two surface syntaxes the script is written in. Any other
  * attribute is rejected with {@code UNKNOWN_PRAGMA_ATTRIBUTE}.</p>
  *
- * @param version    the declared version, such as {@code "1.0"}
+ * @param version    the declared version, such as {@code "1.1"}
  * @param attributes the named attributes, in the order written
  * @param position   where the pragma was written
  */

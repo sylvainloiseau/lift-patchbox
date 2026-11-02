@@ -15,12 +15,16 @@ import fr.cnrs.lacito.liftapi.model.LiftHeader;
 import fr.cnrs.lacito.liftapi.model.LiftTrait;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Optional;
+import java.util.Set;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
 import org.junit.jupiter.api.Test;
+import org.junit.jupiter.api.io.TempDir;
 
 /**
  * The constructs that organize a script rather than change one component:
@@ -407,8 +411,10 @@ class ConstructsTest extends PatchTestSupport {
         void refuseEachCondition() {
             refused(ErrorCode.NO_SUCH_DECLARATION, "feature-create \"x\" in \"nothing\"");
             refused(ErrorCode.NO_SUCH_DECLARATION, "feature-delete \"x\" in \"grammatical-info\"");
-            refused(ErrorCode.DECLARATION_ALREADY_EXISTS,
-                "feature-create \"Noun\" in \"grammatical-info\"");
+            refused(ErrorCode.DECLARATION_ALREADY_EXISTS, """
+                feature-create "Noun" in "grammatical-info"
+                feature-create "Noun" in "grammatical-info"
+                """);
             refused(ErrorCode.DECLARATION_ALREADY_EXISTS, "feature-set-create \"note-type\"");
             refused(ErrorCode.DECLARATION_IS_BUILT_IN,
                 "feature-set-rename \"grammatical-info\" to \"pos\"");
@@ -421,6 +427,7 @@ class ConstructsTest extends PatchTestSupport {
         @DisplayName("are rolled back with the rest of a failing script")
         void areRolledBack() {
             Feature noun = header().getGrammaticalInfoManager().getFeature("Noun");
+            header().declareFeature(noun);
             header().getGrammaticalInfoManager().addFeature("Adverb");
             Feature adverb = header().getGrammaticalInfoManager().getFeature("Adverb");
             refused(ErrorCode.CANNOT_CREATE_DUPLICATE, """
@@ -470,13 +477,73 @@ class ConstructsTest extends PatchTestSupport {
             assertEquals(Optional.of("N"), category(senses(mami, "en", "pork").get(0)));
         }
 
+        @TempDir
+        Path dir;
+
+        /**
+         * Replace the fixture by a dictionary whose feature set {@code dialects} is
+         * defined in an external ranges file, with the values {@code north} and
+         * {@code south}, and whose entry {@code mami} has a {@code dialects} trait.
+         */
+        private void loadWithAnExternalRange() throws Exception {
+            Files.writeString(dir.resolve("dialects.lift-ranges"), """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <lift-ranges>
+                <range id="dialects">
+                <range-element id="north"/>
+                <range-element id="south"/>
+                </range>
+                </lift-ranges>
+                """);
+            Path lift = dir.resolve("external.lift");
+            Files.writeString(lift, """
+                <?xml version="1.0" encoding="UTF-8"?>
+                <lift version="0.13" producer="test">
+                <header><ranges>
+                <range id="dialects" href="dialects.lift-ranges"/>
+                </ranges></header>
+                <entry id="mami_1" guid="11111111-1111-1111-1111-111111111111">
+                <lexical-unit><form lang="tww"><text>mami</text></form></lexical-unit>
+                <trait name="dialects" value="north"/>
+                <sense id="s1"><gloss lang="en"><text>pig</text></gloss></sense>
+                </entry>
+                </lift>
+                """);
+            dictionary = LiftDictionary.loadDictionaryFromFile(lift.toFile());
+            assertTrue(header().getFeatureSet("dialects").isExternallyDefined());
+        }
+
         @Test
-        @DisplayName("a set from an external ranges file that was not read cannot be renamed")
-        void anUnreadExternalSetCannotBeRenamed() {
-            header().addFeatureSet("dialects").setHref("dialects.lift-ranges");
+        @DisplayName("a set from an external ranges file cannot be renamed")
+        void anExternalSetCannotBeRenamed() throws Exception {
+            loadWithAnExternalRange();
             refused(ErrorCode.DECLARATION_IS_EXTERNAL,
                 "feature-set-rename \"dialects\" to \"regions\"");
             assertTrue(header().hasFeatureSet("dialects"));
+        }
+
+        @Test
+        @DisplayName("the features of a set from an external ranges file cannot be changed")
+        void theFeaturesOfAnExternalSetCannotBeChanged() throws Exception {
+            loadWithAnExternalRange();
+            refused(ErrorCode.DECLARATION_IS_EXTERNAL, "feature-create \"east\" in \"dialects\"");
+            refused(ErrorCode.DECLARATION_IS_EXTERNAL,
+                "feature-rename \"south\" in \"dialects\" to \"deep south\"");
+            refused(ErrorCode.DECLARATION_IS_EXTERNAL, "feature-delete \"south\" in \"dialects\"");
+            assertEquals(Set.of("north", "south"),
+                header().getFeatureSet("dialects").getFeatures().keySet());
+        }
+
+        @Test
+        @DisplayName("a command may use a value of an external set, not add one to it")
+        void aCommandUsesTheValuesOfAnExternalSet() throws Exception {
+            loadWithAnExternalRange();
+            apply("create trait(type = \"dialects\", value = \"south\") under sense[gloss@en = \"pig\"] "
+                + "of entry[form@tww = \"mami\"]");
+            refused(ErrorCode.DECLARATION_IS_EXTERNAL,
+                "create trait(type = \"dialects\", value = \"east\") under sense[gloss@en = \"pig\"] "
+                    + "of entry[form@tww = \"mami\"]");
+            assertFalse(header().getFeatureSet("dialects").hasFeature("east"));
         }
 
         @Test
@@ -490,6 +557,56 @@ class ConstructsTest extends PatchTestSupport {
         }
 
         @Test
+        @DisplayName("a value the dictionary uses but its built-in set does not declare is declared by a command")
+        void aCommandDeclaresAnUndeclaredValue() {
+            FeatureSet pos = header().getGrammaticalInfoManager();
+            assertFalse(pos.isDeclared());
+            assertFalse(pos.getFeature("Noun").isDeclared());
+            apply("set value = \"Verb\" on category of sense[gloss@en = \"pig\"] "
+                + "of entry[form@tww = \"mami\", hn = 1]");
+            assertTrue(pos.isDeclared());
+            assertTrue(pos.getFeature("Verb").isDeclared());
+            assertFalse(pos.getFeature("Noun").isDeclared(),
+                "only the value the command names is declared");
+            assertEffects(apply("feature-create \"Noun\" in \"grammatical-info\""),
+                "declared:feature:grammatical-info/Noun");
+            assertTrue(pos.getFeature("Noun").isDeclared());
+        }
+
+        @Test
+        @DisplayName("an implicit declaration is rolled back with the rest of a failing script")
+        void anImplicitDeclarationIsRolledBack() {
+            FeatureSet pos = header().getGrammaticalInfoManager();
+            FeatureSet noteTypes = header().getNoteTypeManager();
+            Feature noun = pos.getFeature("Noun");
+            refused(ErrorCode.CANNOT_CREATE_DUPLICATE, """
+                feature-rename "Noun" in "grammatical-info" to "N"
+                create note(type = "draft", text@en = "to check") under entry[form@tww = "memi"]
+                create trait(type = "cv-pattern", value = "CVCV") under entry[form@tww = "memi"]
+                create sense(gloss@en = "dog") under entry[form@tww = "memi"]
+                """);
+            assertSame(noun, pos.getFeature("Noun"));
+            assertFalse(noun.isDeclared());
+            assertFalse(pos.isDeclared());
+            assertFalse(noteTypes.hasFeature("draft"));
+            assertFalse(noteTypes.isDeclared());
+            assertFalse(header().containsFieldsAndTraitsDefinitions("cv-pattern"));
+        }
+
+        @Test
+        @DisplayName("a trait named after a feature set takes its values from it, and declares nothing")
+        void aTraitNamedAfterASetUsesIt() {
+            apply("""
+                feature-set-create "dialects"
+                feature-create "north" in "dialects"
+                create trait(type = "dialects", value = "north") under entry[form@tww = "memi"]
+                """);
+            assertFalse(header().containsFieldsAndTraitsDefinitions("dialects"));
+            LiftTrait trait = entry("tww", "memi").getTraits().get(0);
+            assertSame(header().getFeatureSet("dialects").getFeature("north"), trait.getTypedValue());
+        }
+
+        @Test
         @DisplayName("a feature used only by a trait of the header cannot be deleted")
         void aFeatureUsedInTheHeaderCannotBeDeleted() {
             FeatureSet usage = header().addFeatureSet("usage");
@@ -497,8 +614,9 @@ class ConstructsTest extends PatchTestSupport {
             LiftFieldAndTraitDefinition register = header().createTraitDefinition("register");
             register.setDataModel(Optional.of("option"));
             register.setResolvedRange(Optional.of(usage));
-            header().getGrammaticalInfoManager().getFeature("Noun")
-                .addTrait(new LiftTrait(register, archaic));
+            Feature noun = header().getGrammaticalInfoManager().getFeature("Noun");
+            header().declareFeature(noun);
+            noun.addTrait(new LiftTrait(register, archaic));
             refused(ErrorCode.DECLARATION_IN_USE, "feature-delete \"archaic\" in \"usage\"");
             refused(ErrorCode.DECLARATION_IN_USE, "trait-delete \"register\"");
         }

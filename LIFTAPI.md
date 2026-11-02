@@ -5,7 +5,7 @@ In order to generate an implementation of this DSL specification you will need t
 
 For refering to a dictionary you will use the existing `liftapi` library, that model a lift dictionary and offer query and creation methods.
 
-The liftapi library is a maven library that is avaible in the local maven repository under the coordinate: fr.cnrs.lacito:lift-api (version: 0.1-SNAPSHOT)
+The liftapi library is a maven library published under the coordinate: io.github.sylvainloiseau:lift-api (on Maven Central; lift-patchbox uses version 0.1.0)
 
 The liftdsl library will be provided with a LiftDictionary (in package fr.cnrs.lacito.liftapi.LiftDictionary) instance.
 
@@ -69,3 +69,12 @@ The LiftDictionaryRegistry instance returned by LiftDictionary  .getLiftDictiona
    methods will remove a component, cut the link parent/child (so that the node
    will not be its parent child's list, for example a sense removed will not be
    seen anymore from its parent LiftEntry instance.)
+
+### Declarations in the header
+
+The header (`LiftDictionary.getHeader()`, a `LiftHeader`) holds the feature sets (ranges) and the field and trait definitions.
+
+- **Declared or not.** A built-in feature set (`getGrammaticalInfoManager()`, `getNoteTypeManager()`, ...) is undeclared until the file has its `<range>`, and a value a component uses but its range does not list is a bare, undeclared `Feature`. Undeclared sets and features are kept but not written, and are read-only: `FeatureSet.getOrCreateFeature`, `addFeature`, `removeFeature`, `changeFeatureId` refuse them with an `IllegalStateException`. `FeatureSet.isDeclared()` / `Feature.isDeclared()` tell them apart; `LiftHeader.declareFeatureSet(fs)` and `declareFeature(f)` make them writable and written.
+- **External feature sets.** A set defined in a `.lift-ranges` file (`FeatureSet.isExternallyDefined()`) is read-only until `LiftHeader.makeFeatureSetInternal(fs)`.
+- **What a trait or field name refers to.** `LiftTrait.getSpecification()` returns a sealed `TraitSpecification`: a `LiftFieldAndTraitDefinition`, a `RangeReference` (a trait named after a feature set) or an `UndeclaredName`; `LiftField.getSpecification()` a `FieldSpecification` (a definition or an `UndeclaredName`). `getName()` gives the name in every case. `LiftHeader.resolveTraitSpecification(name)` / `resolveFieldSpecification(name)` resolve a name without declaring anything; `declareTraitDefinition(name)` / `declareFieldDefinition(name)` declare it.
+- **Undoing a declaration.** There is no public "undeclare": wrap the change in `dictionary.recordChanges()` (a `ChangeRecorder`), commit it, and call `revert()` on its `changes()` in reverse order to undo it.

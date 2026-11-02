@@ -2,6 +2,8 @@ package fr.cnrs.lacito.liftpatchbox.model;
 
 import fr.cnrs.lacito.liftapi.LiftDictionary;
 import fr.cnrs.lacito.liftapi.LiftDictionaryLanguagesManager;
+import fr.cnrs.lacito.liftapi.change.ChangeRecorder;
+import fr.cnrs.lacito.liftapi.change.ModelChange;
 import fr.cnrs.lacito.liftapi.model.AbstractExtensibleWithField;
 import fr.cnrs.lacito.liftapi.model.AbstractExtensibleWithoutField;
 import fr.cnrs.lacito.liftapi.model.AbstractIdentifiable;
@@ -18,7 +20,9 @@ import fr.cnrs.lacito.liftapi.model.LiftEntry;
 import fr.cnrs.lacito.liftapi.model.LiftEtymology;
 import fr.cnrs.lacito.liftapi.model.LiftExample;
 import fr.cnrs.lacito.liftapi.model.LiftField;
+import fr.cnrs.lacito.liftapi.model.FieldSpecification;
 import fr.cnrs.lacito.liftapi.model.LiftFieldAndTraitDefinition;
+import fr.cnrs.lacito.liftapi.model.LiftFieldAndTraitDefinitionDataModel;
 import fr.cnrs.lacito.liftapi.model.LiftHeader;
 import fr.cnrs.lacito.liftapi.model.LiftIllustration;
 import fr.cnrs.lacito.liftapi.model.LiftMedia;
@@ -31,6 +35,8 @@ import fr.cnrs.lacito.liftapi.model.LiftTranslation;
 import fr.cnrs.lacito.liftapi.model.LiftTrait;
 import fr.cnrs.lacito.liftapi.model.LiftVariant;
 import fr.cnrs.lacito.liftapi.model.MultiText;
+import fr.cnrs.lacito.liftapi.model.TraitSpecification;
+import fr.cnrs.lacito.liftapi.model.UndeclaredName;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
 import java.util.ArrayList;
@@ -42,6 +48,7 @@ import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
 import java.util.function.IntConsumer;
+import java.util.function.Supplier;
 
 /**
  * The single place that knows how the LiftPatch metamodel maps onto the
@@ -258,15 +265,100 @@ public final class LiftModel {
     }
 
     /**
-     * Whether a feature set is defined in an external ranges file that was not loaded
-     * with the dictionary: such a set cannot be renamed.
+     * Whether a feature set is defined in an external ranges file: such a set is
+     * read-only, since that file is never written when the dictionary is saved.
      *
      * @param id the id of an existing feature set
-     * @return {@code true} when its content lives in a file that was not read
+     * @return {@code true} when its content comes from an external ranges file
      */
-    public boolean isExternalUnloaded(String id) {
-        FeatureSet fs = header().getFeatureSet(id);
-        return fs.getHref().isPresent() && !fs.isExternalContentLoaded();
+    public boolean isExternal(String id) {
+        return header().getFeatureSet(id).isExternallyDefined();
+    }
+
+    /**
+     * Run a change of the dictionary and record, in the journal, the revert of every
+     * change the dictionary model reports for it.
+     *
+     * <p>Used for the declarations ({@code declareFeatureSet}, {@code declareFeature},
+     * {@code declareTraitDefinition}...), which have no public inverse: the dictionary
+     * model only undoes them by reverting the change records it reports, and the
+     * cascade some of them trigger (traits rebound to a new definition) is reported
+     * with them.</p>
+     *
+     * @param change the change to run
+     * @param <T>    what it returns
+     * @return what the change returned
+     */
+    private <T> T recorded(Supplier<T> change) {
+        try (ChangeRecorder recorder = dictionary.recordChanges()) {
+            T result = change.get();
+            recorder.commit();
+            List<ModelChange> changes = recorder.changes();
+            if (!changes.isEmpty()) {
+                journal.record(() -> {
+                    for (int i = changes.size() - 1; i >= 0; i--) {
+                        changes.get(i).revert();
+                    }
+                });
+            }
+            return result;
+        }
+    }
+
+    private void recorded(Runnable change) {
+        recorded(() -> {
+            change.run();
+            return null;
+        });
+    }
+
+    /**
+     * Make a feature set writable, declaring it when it is a built-in set the file
+     * does not declare (Part 1, section 2.1.4).
+     *
+     * @throws ExternalRangeException if the set is defined in an external ranges file
+     */
+    private void requireWritable(FeatureSet fs) {
+        if (fs.isExternallyDefined()) {
+            throw new ExternalRangeException(fs.getId(), null);
+        }
+        if (!fs.isDeclared()) {
+            recorded(() -> header().declareFeatureSet(fs));
+        }
+    }
+
+    /**
+     * The feature a command names as a value (a {@code type}, the {@code value} of a
+     * category, a value of an option trait), declared: a value its feature set does not
+     * declare is declared, and so is the set itself when it is a built-in set the file
+     * does not declare (Part 1, section 2.1.4). Each declaration is recorded in the
+     * journal.
+     *
+     * <p>A feature set defined in an external ranges file cannot be changed: a value
+     * it already holds is used as it is, and a new one is refused.</p>
+     *
+     * @param fs the feature set the value is taken from
+     * @param id the id of the value
+     * @return the feature
+     * @throws ExternalRangeException for a new value of an external feature set
+     */
+    private Feature featureFor(FeatureSet fs, String id) {
+        if (fs.hasFeature(id)) {
+            Feature existing = fs.getFeature(id);
+            if (!existing.isDeclared() && !fs.isExternallyDefined()) {
+                recorded(() -> header().declareFeature(existing));
+            }
+            return existing;
+        }
+        if (fs.isExternallyDefined()) {
+            throw new ExternalRangeException(fs.getId(), id);
+        }
+        return recorded(() -> {
+            if (!fs.isDeclared()) {
+                header().declareFeatureSet(fs);
+            }
+            return fs.addFeature(id);
+        });
     }
 
     /**
@@ -332,16 +424,29 @@ public final class LiftModel {
     }
 
     /**
-     * Declare a feature in a feature set, recording its removal.
+     * Whether a feature set holds a feature its range declares. A value the
+     * dictionary uses but its range does not declare is held too, undeclared
+     * ({@link #hasFeature(String, String)}).
      *
-     * @param featureSet the id of the feature set
-     * @param id         the id of the new feature
+     * @param featureSet the id of an existing feature set
+     * @param id         the id of the feature
+     * @return {@code true} when it exists and is declared
+     */
+    public boolean hasDeclaredFeature(String featureSet, String id) {
+        FeatureSet fs = header().getFeatureSet(featureSet);
+        return fs.hasFeature(id) && fs.getFeature(id).isDeclared();
+    }
+
+    /**
+     * Declare a feature in a feature set, recording its removal: a new one, or one the
+     * dictionary uses but its range does not declare. A built-in set the file does not
+     * declare is declared with it.
+     *
+     * @param featureSet the id of the feature set, which is not external
+     * @param id         the id of the feature
      */
     public void createFeature(String featureSet, String id) {
-        FeatureSet fs = header().getFeatureSet(featureSet);
-        Feature f = fs.addFeature(id);
-        // The id at undo time: a rename recorded after this one is undone first.
-        journal.record(() -> fs.removeFeature(f.getId()));
+        featureFor(header().getFeatureSet(featureSet), id);
     }
 
     /**
@@ -354,6 +459,7 @@ public final class LiftModel {
      */
     public void deleteFeature(String featureSet, String id) {
         FeatureSet fs = header().getFeatureSet(featureSet);
+        requireWritable(fs);
         Feature f = fs.removeFeature(id);
         journal.record(() -> fs.addFeature(f));
     }
@@ -369,7 +475,9 @@ public final class LiftModel {
      */
     public void renameFeature(String featureSet, String id, String newId) {
         FeatureSet fs = header().getFeatureSet(featureSet);
-        Feature f = fs.getFeature(id);
+        // A value the dictionary uses but its range does not declare is declared first:
+        // renaming it is a change of the header.
+        Feature f = featureFor(fs, id);
         fs.changeFeatureId(f, newId);
         journal.record(() -> fs.changeFeatureId(f, id));
     }
@@ -730,7 +838,7 @@ public final class LiftModel {
             case LiftMedia m -> "url".equals(property)
                 ? Optional.ofNullable(m.getHref()) : Optional.empty();
             case LiftTrait t -> switch (property) {
-                case "type" -> Optional.ofNullable(t.getSpecification()).map(LiftFieldAndTraitDefinition::getName);
+                case "type" -> Optional.of(t.getName());
                 case "value" -> Optional.ofNullable(t.getValue()).filter(s -> !s.isEmpty());
                 default -> Optional.empty();
             };
@@ -745,7 +853,7 @@ public final class LiftModel {
             case LiftTranslation t -> "type".equals(property)
                 ? featureId(t.getType()) : Optional.empty();
             case LiftField f -> "type".equals(property)
-                ? Optional.ofNullable(f.getSpecification()).map(LiftFieldAndTraitDefinition::getName)
+                ? Optional.of(f.getName())
                 : Optional.empty();
             case GrammaticalInfo g -> "value".equals(property)
                 ? featureId(g.getGramInfoValue()) : Optional.empty();
@@ -912,7 +1020,7 @@ public final class LiftModel {
                 switch (property) {
                     case "value" -> {
                         Object old = t.getTypedValue();
-                        t.setTypedValue(LiftTrait.parseValue(t.getSpecification(), value));
+                        t.setTypedValue(traitValue(t.getSpecification(), value));
                         journal.record(() -> t.setTypedValue(old));
                     }
                     case "type" -> throw new UnsupportedByModelException(
@@ -1078,14 +1186,14 @@ public final class LiftModel {
     private void setFeature(
         Feature old, String value, FeatureSet manager, java.util.function.Consumer<Feature> setter
     ) {
-        Feature fresh = value == null ? null : manager.getOrCreateFeature(value);
+        Feature fresh = value == null ? null : featureFor(manager, value);
         setter.accept(fresh);
         journal.record(() -> setter.accept(old));
     }
 
     private void setCategoryValue(LiftSense sense, String value) {
         Optional<GrammaticalInfo> old = sense.getGrammaticalInfo();
-        String oldValue = old.map(GrammaticalInfo::getGramInfoValue).map(Feature::getId).orElse(null);
+        Feature oldValue = old.map(GrammaticalInfo::getGramInfoValue).orElse(null);
         if (value == null) {
             if (old.isPresent()) {
                 sense.deleteGrammaticalInfo();
@@ -1093,7 +1201,7 @@ public final class LiftModel {
             }
             return;
         }
-        Feature feature = dictionary.getHeader().getGrammaticalInfoManager().getOrCreateFeature(value);
+        Feature feature = featureFor(header().getGrammaticalInfoManager(), value);
         if (old.isPresent()) {
             sense.deleteGrammaticalInfo();
         }
@@ -1101,14 +1209,40 @@ public final class LiftModel {
         journal.record(() -> restoreCategory(sense, oldValue));
     }
 
-    private void restoreCategory(LiftSense sense, String oldValue) {
+    private void restoreCategory(LiftSense sense, Feature oldValue) {
         if (sense.getGrammaticalInfo().isPresent()) {
             sense.deleteGrammaticalInfo();
         }
         if (oldValue != null) {
-            sense.setGrammaticalInfo(
-                dictionary.getHeader().getGrammaticalInfoManager().getOrCreateFeature(oldValue));
+            sense.setGrammaticalInfo(oldValue);
         }
+    }
+
+    /**
+     * The typed value of a trait, parsed after what its name refers to, as the
+     * dictionary model's own reader does. The values of an option trait are features
+     * of its range: each is declared first ({@link #featureFor(FeatureSet, String)}),
+     * the parser then finds them.
+     */
+    private Object traitValue(TraitSpecification specification, String value) {
+        String text = value == null ? "" : value;
+        specification.getResolvedFeatureSet().ifPresent(range -> {
+            LiftFieldAndTraitDefinitionDataModel model = specification.getDataModel();
+            if (model == LiftFieldAndTraitDefinitionDataModel.FEATURE) {
+                if (!text.isEmpty()) {
+                    featureFor(range, text);
+                }
+            } else if (model == LiftFieldAndTraitDefinitionDataModel.FEATURE_SET
+                || model == LiftFieldAndTraitDefinitionDataModel.FEATURE_LIST) {
+                // The separator of the dictionary model's parser.
+                for (String id : text.split(",")) {
+                    if (!id.trim().isEmpty()) {
+                        featureFor(range, id.trim());
+                    }
+                }
+            }
+        });
+        return LiftTrait.parseValue(specification, text);
     }
 
     // ===================================================================
@@ -1226,8 +1360,7 @@ public final class LiftModel {
 
     private ComponentRef createEtymology(ComponentRef parent, NewComponent spec) {
         LiftEntry entry = requireType(parent, LiftEntry.class, "etymology");
-        Feature type = dictionary.getHeader().getEtymologyTypeManager()
-            .getOrCreateFeature(required(spec, "type", "etymology"));
+        Feature type = featureFor(header().getEtymologyTypeManager(), required(spec, "type", "etymology"));
         LiftEtymology etymology = LiftEtymology.create(type, spec.scalar("source"));
         entry.addEtymology(etymology);
         journal.record(() -> entry.deleteEtymology(etymology));
@@ -1244,8 +1377,7 @@ public final class LiftModel {
 
     private ComponentRef createRelation(ComponentRef parent, NewComponent spec, Integer position) {
         LiftRelation relation = LiftRelation.create(
-            dictionary.getHeader().getRelationTypeManager()
-                .getOrCreateFeature(required(spec, "type", "relation")));
+            featureFor(header().getRelationTypeManager(), required(spec, "type", "relation")));
         setCreatedReference(spec.scalar("target"), relation::setRefId, relation::setRefObject);
         AbstractLiftRoot node = requireNode(parent);
         switch (node) {
@@ -1298,8 +1430,7 @@ public final class LiftModel {
 
     private ComponentRef createReversal(ComponentRef parent, NewComponent spec, Integer position) {
         LiftReversal reversal = new LiftReversal(
-            dictionary.getHeader().getInverseTypeManager()
-                .getOrCreateFeature(required(spec, "type", "reversal")));
+            featureFor(header().getInverseTypeManager(), required(spec, "type", "reversal")));
         AbstractLiftRoot node = requireNode(parent);
         switch (node) {
             case LiftSense sense -> insert(position, sense.getReversals(),
@@ -1310,14 +1441,12 @@ public final class LiftModel {
     }
 
     private ComponentRef createTrait(ComponentRef parent, NewComponent spec, Integer position) {
-        LiftFieldAndTraitDefinition definition = dictionary.getHeader()
-            .getOrCreateTraitsDefinitions(required(spec, "type", "trait"));
-        // The value is parsed after the definition's data model, as the dictionary
-        // model's own reader and TraitBuilder do: a trait whose definition has an
-        // option range holds a feature, created in the range when it is new.
+        TraitSpecification definition = traitSpecification(required(spec, "type", "trait"));
+        // The value is parsed after what the name refers to, as the dictionary model's
+        // own reader and TraitBuilder do: a trait whose definition has an option range,
+        // or that is named after a range, holds features of that range.
         LiftTrait trait = new LiftTrait(definition);
-        trait.setTypedValue(
-            LiftTrait.parseValue(definition, spec.scalars().getOrDefault("value", "")));
+        trait.setTypedValue(traitValue(definition, spec.scalars().getOrDefault("value", "")));
         if (parent instanceof ComponentRef.Category category) {
             GrammaticalInfo info = grammaticalInfo(category.host()).orElseThrow(() ->
                 new UnsupportedByModelException(
@@ -1345,8 +1474,7 @@ public final class LiftModel {
         ComponentRef parent, NewComponent spec, Integer position
     ) {
         LiftAnnotation annotation = new LiftAnnotation(
-            dictionary.getHeader().getAnnotationTypeManager()
-                .getOrCreateFeature(required(spec, "type", "annotation")));
+            featureFor(header().getAnnotationTypeManager(), required(spec, "type", "annotation")));
         annotation.setValue(spec.scalar("value"));
         annotation.setWhen(spec.scalar("when"));
         annotation.setWho(spec.scalar("who"));
@@ -1367,8 +1495,7 @@ public final class LiftModel {
     private ComponentRef createNote(ComponentRef parent, NewComponent spec) {
         AbstractNotable host = requireType(parent, AbstractNotable.class, "note");
         LiftNote note = LiftNote.create();
-        note.setType(dictionary.getHeader().getNoteTypeManager()
-            .getOrCreateFeature(required(spec, "type", "note")));
+        note.setType(featureFor(header().getNoteTypeManager(), required(spec, "type", "note")));
         host.addNote(note);
         journal.record(() -> host.deleteNote(note));
         return new ComponentRef.Node("note", note);
@@ -1377,17 +1504,42 @@ public final class LiftModel {
     private ComponentRef createField(ComponentRef parent, NewComponent spec) {
         AbstractExtensibleWithField host =
             requireType(parent, AbstractExtensibleWithField.class, "field");
-        LiftField field = LiftField.create(dictionary.getHeader()
-            .getOrCreateFieldDefinitions(required(spec, "type", "field")));
+        LiftField field = LiftField.create(fieldSpecification(required(spec, "type", "field")));
         host.addField(field);
         journal.record(() -> host.deleteField(field));
         return new ComponentRef.Node("field", field);
     }
 
+    /**
+     * What the type of a new trait refers to: its definition, or the feature set it is
+     * named after (whose features are its values). A name that refers to neither is
+     * declared, with the default data model of a trait, and the declaration recorded
+     * (Part 1, section 2.1.5).
+     */
+    private TraitSpecification traitSpecification(String name) {
+        TraitSpecification resolved = header().resolveTraitSpecification(name);
+        if (resolved instanceof UndeclaredName) {
+            return recorded(() -> header().declareTraitDefinition(name));
+        }
+        return resolved;
+    }
+
+    /**
+     * The definition of the type of a new field. A name that has none is declared,
+     * with the default data model of a field, and the declaration recorded (Part 1,
+     * section 2.1.5).
+     */
+    private FieldSpecification fieldSpecification(String name) {
+        FieldSpecification resolved = header().resolveFieldSpecification(name);
+        if (resolved instanceof UndeclaredName) {
+            return recorded(() -> header().declareFieldDefinition(name));
+        }
+        return resolved;
+    }
+
     private ComponentRef createTranslation(ComponentRef parent, NewComponent spec) {
         LiftExample example = requireType(parent, LiftExample.class, "translation");
-        Feature key = dictionary.getHeader().getTranslationTypeManager()
-            .getOrCreateFeature(required(spec, "type", "translation"));
+        Feature key = featureFor(header().getTranslationTypeManager(), required(spec, "type", "translation"));
         LiftTranslation translation = LiftTranslation.create(key);
         example.addTranslation(translation);
         journal.record(() -> example.deleteTranslation(translation));

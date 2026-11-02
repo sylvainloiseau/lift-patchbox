@@ -29,7 +29,7 @@ import org.junit.jupiter.api.TestFactory;
  * <p>The corpus is the part of the specification that can be run, and it is
  * therefore the part that decides, in practice, what the language is. Each case
  * gives a dictionary, a script and an expected outcome, and an implementation
- * claims conformance to LiftPatch 1.0 by passing every one of them.</p>
+ * claims conformance to LiftPatch 1.1 by passing every one of them.</p>
  *
  * <p>The comparison is exactly the one Appendix D.1 defines: for an {@code ok}
  * case, the concatenated effects restricted to the ten comparable fields, plus

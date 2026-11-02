@@ -152,7 +152,10 @@ public enum ErrorCode {
     DECLARATION_IN_USE(ErrorKind.DYNAMIC),
     /** A built-in feature set would be deleted or renamed. */
     DECLARATION_IS_BUILT_IN(ErrorKind.DYNAMIC),
-    /** A feature set defined in an external ranges file that was not loaded would be renamed. */
+    /**
+     * A feature set defined in an external ranges file, which is read-only, would be
+     * renamed, have a feature created, deleted or renamed, or gain a value a command names.
+     */
     DECLARATION_IS_EXTERNAL(ErrorKind.DYNAMIC);
 
     private final ErrorKind kind;

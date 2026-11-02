@@ -31,6 +31,7 @@ import fr.cnrs.lacito.liftpatchbox.metamodel.PropertyDef;
 import fr.cnrs.lacito.liftpatchbox.model.ComponentRef;
 import fr.cnrs.lacito.liftpatchbox.model.Journal;
 import fr.cnrs.lacito.liftpatchbox.model.LiftModel;
+import fr.cnrs.lacito.liftpatchbox.model.ExternalRangeException;
 import fr.cnrs.lacito.liftpatchbox.model.UnsupportedByModelException;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -122,7 +123,7 @@ public final class Executor {
         if (script.recognizedLines() == 0) {
             warn(LiftPatchWarning.document(WarningCode.NO_COMMAND_RECOGNIZED,
                 "not one line of " + script.source() + " was recognized as a command; if this is "
-                    + "a reference-syntax script, declare it with %liftpatch 1.0 "
+                    + "a reference-syntax script, declare it with %liftpatch 1.1 "
                     + "syntax=\"LiftPatchRef\" or pass the syntax explicitly"));
         }
         try {
@@ -315,12 +316,7 @@ public final class Executor {
         if (model.hasFeatureSet(d.newName())) {
             throw alreadyDeclared("feature set", d.newName(), d.position());
         }
-        if (model.isExternalUnloaded(d.name())) {
-            throw resolver.error(ErrorCode.DECLARATION_IS_EXTERNAL,
-                "the feature set `" + d.name() + "` is defined in an external ranges file that "
-                    + "was not loaded; that file would go on naming it `" + d.name() + "`",
-                d.position());
-        }
+        requireNotExternal(d.name(), d.position());
         model.renameFeatureSet(d.name(), d.newName());
         return Effect.declarationRenamed("feature-set", d.name(), null, d.newName());
     }
@@ -329,15 +325,19 @@ public final class Executor {
 
     private Effect featureCreate(Directive.FeatureCreate d) {
         requireFeatureSet(d.featureSet(), d.position());
-        if (model.hasFeature(d.featureSet(), d.name())) {
+        // A value the dictionary uses but its range does not declare is declared here,
+        // as a command naming it would (Part 1, section 2.1.4).
+        if (model.hasDeclaredFeature(d.featureSet(), d.name())) {
             throw alreadyDeclared("feature", d.name() + "` in `" + d.featureSet(), d.position());
         }
+        requireNotExternal(d.featureSet(), d.position());
         model.createFeature(d.featureSet(), d.name());
         return Effect.declarationCreated("feature", d.name(), d.featureSet());
     }
 
     private Effect featureDelete(Directive.FeatureDelete d) {
         requireFeature(d.featureSet(), d.name(), d.position());
+        requireNotExternal(d.featureSet(), d.position());
         if (model.featureInUse(d.featureSet(), d.name())) {
             throw resolver.error(ErrorCode.DECLARATION_IN_USE,
                 "the feature `" + d.name() + "` of `" + d.featureSet() + "` is in use",
@@ -352,6 +352,7 @@ public final class Executor {
         if (model.hasFeature(d.featureSet(), d.newName())) {
             throw alreadyDeclared("feature", d.newName() + "` in `" + d.featureSet(), d.position());
         }
+        requireNotExternal(d.featureSet(), d.position());
         model.renameFeature(d.featureSet(), d.name(), d.newName());
         return Effect.declarationRenamed("feature", d.name(), d.featureSet(), d.newName());
     }
@@ -409,6 +410,15 @@ public final class Executor {
         if (model.isBuiltInFeatureSet(id)) {
             throw resolver.error(ErrorCode.DECLARATION_IS_BUILT_IN,
                 "`" + id + "` is a built-in feature set, which cannot be " + done,
+                position);
+        }
+    }
+
+    private void requireNotExternal(String id, SourcePosition position) {
+        if (model.isExternal(id)) {
+            throw resolver.error(ErrorCode.DECLARATION_IS_EXTERNAL,
+                "the feature set `" + id + "` is defined in an external ranges file, which is "
+                    + "not written when the dictionary is saved, and cannot be changed",
                 position);
         }
     }
@@ -477,7 +487,7 @@ public final class Executor {
 
         Integer position = creationPosition(at, parent, def);
         LiftModel.NewComponent spec = new LiftModel.NewComponent(type, scalars, multitexts);
-        ComponentRef created = duplicateAware(
+        ComponentRef created = refusalAware(
             () -> model.createChild(parent, spec, position), def, constructor.position());
         checkUniquenessInvariant(parent, created, def, constructor.position());
 
@@ -900,7 +910,7 @@ public final class Executor {
             String old = model.scalar(component, property.name()).orElse(null);
             String value = resolver.scalarValueOf(
                 assignment.value(), property, assignment.position());
-            duplicateAware(
+            refusalAware(
                 () -> {
                     model.setScalar(component, property.name(), value);
                     return null;
@@ -1201,8 +1211,8 @@ public final class Executor {
     // ===================================================================
 
     /**
-     * Run a mutation that the dictionary model may refuse as a duplicate key, and
-     * report the refusal with the language's own code.
+     * Run a mutation that the dictionary model may refuse, and report the refusal
+     * with the language's own code.
      *
      * <p>A parent that holds its children keyed by type — the map of a {@code note}
      * or of a {@code translation} — refuses a second child of the same type itself,
@@ -1210,8 +1220,12 @@ public final class Executor {
      * section 5.2 enforced one level down, and it fires before
      * {@link #checkUniquenessInvariant} can look, so it is caught here and turned
      * into {@code CANNOT_CREATE_DUPLICATE}.</p>
+     *
+     * <p>A value a command names declares it in its feature set (Part 1, section
+     * 2.1.4), which a feature set defined in an external ranges file refuses: that is
+     * {@code DECLARATION_IS_EXTERNAL}.</p>
      */
-    private <T> T duplicateAware(
+    private <T> T refusalAware(
         java.util.function.Supplier<T> mutation, ComponentTypeDef def, SourcePosition position
     ) {
         try {
@@ -1221,6 +1235,8 @@ public final class Executor {
                 "two `" + def.name() + "` siblings would share the same `type`, which is the "
                     + "key their parent holds them by",
                 position);
+        } catch (ExternalRangeException e) {
+            throw resolver.error(ErrorCode.DECLARATION_IS_EXTERNAL, e.getMessage(), position);
         }
     }
 
