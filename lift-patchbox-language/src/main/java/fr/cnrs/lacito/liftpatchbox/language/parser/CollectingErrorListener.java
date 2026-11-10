@@ -1,7 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.language.parser;
 
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
 import java.util.ArrayList;
@@ -13,7 +12,7 @@ import org.antlr.v4.runtime.Recognizer;
 
 /**
  * An ANTLR error listener that turns every lexer and parser diagnostic into a
- * {@link ErrorCode#SYNTAX_ERROR}, with its position.
+ * {@link ModelErrorCode#SYNTAX_ERROR}, with its position.
  *
  * <p>The listener replaces ANTLR's default console listener, which writes to
  * {@code System.err} and is invisible to the caller. A line that matches the

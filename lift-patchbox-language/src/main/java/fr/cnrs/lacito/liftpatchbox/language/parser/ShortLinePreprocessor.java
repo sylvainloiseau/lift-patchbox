@@ -2,7 +2,6 @@ package fr.cnrs.lacito.liftpatchbox.language.parser;
 
 import fr.cnrs.lacito.liftpatchbox.ast.Verb;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
@@ -136,7 +135,7 @@ public final class ShortLinePreprocessor {
      *
      * @param document the whole document text
      * @return the recognized lines, the sigil, and the pragma
-     * @throws LiftPatchException with {@link ErrorCode#SYNTAX_ERROR} when a command
+     * @throws LiftPatchException with {@link ModelErrorCode#SYNTAX_ERROR} when a command
      *         line is indented with a tab, or when a pragma declaring a sigil is not
      *         the first non-blank line
      */

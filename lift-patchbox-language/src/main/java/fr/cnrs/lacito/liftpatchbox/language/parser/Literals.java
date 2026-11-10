@@ -1,7 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.language.parser;
 
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
@@ -34,7 +33,7 @@ public final class Literals {
      * @param literal  the literal including its quotes, as the lexer matched it
      * @param position where the literal was written, for the error message
      * @return the string content, with escapes resolved
-     * @throws LiftPatchException with {@link ErrorCode#SYNTAX_ERROR} if a
+     * @throws LiftPatchException with {@link ModelErrorCode#SYNTAX_ERROR} if a
      *         double-quoted string contains a backslash followed by anything
      *         other than {@code "} or {@code \}
      */

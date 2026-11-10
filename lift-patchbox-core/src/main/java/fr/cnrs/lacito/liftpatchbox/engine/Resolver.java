@@ -89,7 +89,7 @@ public final class Resolver {
      *
      * @param name the label name, without its {@code $}
      * @return the component
-     * @throws LiftPatchException with {@link ErrorCode#UNKNOWN_LABEL} if the label
+     * @throws LiftPatchException with {@link ModelErrorCode#UNKNOWN_LABEL} if the label
      *         is not bound
      */
     public ComponentRef label(String name, SourcePosition position) {

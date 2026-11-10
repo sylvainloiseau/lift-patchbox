@@ -4,9 +4,10 @@ package fr.cnrs.lacito.liftpatchbox.language;
  * The two surface syntaxes of the LiftPatch language.
  *
  * <p>They share one semantics and one command model: a script parsed with either
- * of them yields the same {@link Script}. The constant is kept on the script so
- * that plan mode can report {@code script.syntax}, which Part 2, section 12.4.1
- * requires to be always present and always compared.</p>
+ * of them yields the same {@link fr.cnrs.lacito.liftpatchbox.ast.Script}. The
+ * constant is kept on the {@link SourceScript}, and its name on the script, so that
+ * plan mode can report {@code script.syntax}, which Part 2, section 12.4.1 requires
+ * to be always present and always compared.</p>
  */
 public enum Syntax {
 

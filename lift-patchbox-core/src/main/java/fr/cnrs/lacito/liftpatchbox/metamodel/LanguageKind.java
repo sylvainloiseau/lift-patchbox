@@ -47,7 +47,7 @@ public enum LanguageKind {
      * The error code raised when a language code of this kind is not in the
      * dictionary's list for that kind.
      *
-     * @return {@link ErrorCode#NO_SUCH_OBJECT_LANGUAGE} or {@link ErrorCode#NO_SUCH_META_LANGUAGE}
+     * @return {@link ModelErrorCode#NO_SUCH_OBJECT_LANGUAGE} or {@link ModelErrorCode#NO_SUCH_META_LANGUAGE}
      */
     public ErrorCode noSuchLanguageError() {
         return noSuchLanguage;
