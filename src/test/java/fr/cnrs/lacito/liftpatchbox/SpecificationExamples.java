@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox;
 
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
+import fr.cnrs.lacito.liftpatchbox.parser.Syntax;
 import java.io.IOException;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;

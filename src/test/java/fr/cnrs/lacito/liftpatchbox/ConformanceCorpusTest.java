@@ -4,7 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.fail;
 
 import fr.cnrs.lacito.liftapi.LiftDictionary;
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
+import fr.cnrs.lacito.liftpatchbox.parser.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Effect;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorKind;

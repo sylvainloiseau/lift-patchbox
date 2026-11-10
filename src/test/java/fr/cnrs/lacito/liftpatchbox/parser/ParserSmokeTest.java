@@ -8,7 +8,7 @@ import fr.cnrs.lacito.liftpatchbox.ast.Block;
 import fr.cnrs.lacito.liftpatchbox.ast.Command;
 import fr.cnrs.lacito.liftpatchbox.ast.Directive;
 import fr.cnrs.lacito.liftpatchbox.ast.Script;
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
+import fr.cnrs.lacito.liftpatchbox.parser.Syntax;
 import java.util.List;
 import org.junit.jupiter.api.Test;
 
@@ -18,11 +18,11 @@ class ParserSmokeTest {
     private final ScriptParser parser = new ScriptParser();
 
     private Script ref(String text) {
-        return parser.parse(text, Syntax.REFERENCE, "<test>");
+        return parser.parse(text, Syntax.REFERENCE, "<test>").script();
     }
 
     private Script concise(String text) {
-        return parser.parse(text, Syntax.CONCISE, "<test>");
+        return parser.parse(text, Syntax.CONCISE, "<test>").script();
     }
 
     private static final String DIRECTIVES = """

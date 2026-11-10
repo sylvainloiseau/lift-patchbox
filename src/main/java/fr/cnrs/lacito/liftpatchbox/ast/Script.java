@@ -4,47 +4,38 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * A whole script: an optional pragma and a sequence of items.
+ * A whole script: a sequence of items.
  *
  * <p>A script is the unit of atomicity (Part 2, section 12.2): it either
  * succeeds completely or leaves the dictionary exactly as it was.</p>
  *
- * @param pragma          the version pragma, or {@code null} when the script declares none
- * @param items           the top-level items, in source order
- * @param syntax          the surface syntax the script was parsed with
- * @param source          the name of the source, for diagnostics and plan documents
- * @param recognizedLines how many lines were recognized as commands, which is what
- *                        the {@code NO_COMMAND_RECOGNIZED} warning is based on
+ * <p>A script carries no trace of the text it may have been parsed from, beyond two
+ * labels that the plan document reports: the name of its source, and the name of
+ * the surface syntax it was written in, which is {@code null} for a script built
+ * in Java.</p>
+ *
+ * @param items      the top-level items, in source order
+ * @param source     the name of the source, for diagnostics and plan documents
+ * @param syntaxName the name of the surface syntax, such as {@code "LiftPatchRef"},
+ *                   or {@code null} when the script was not parsed
  */
 public record Script(
-    Pragma pragma,
     List<Item> items,
-    Syntax syntax,
     String source,
-    int recognizedLines
+    String syntaxName
 ) {
 
     /**
      * Canonical constructor, taking an unmodifiable copy of the items.
      *
-     * @param pragma          the version pragma, or {@code null}
-     * @param items           the top-level items
-     * @param syntax          the surface syntax
-     * @param source          the name of the source
-     * @param recognizedLines how many lines were recognized as commands
+     * @param items      the top-level items
+     * @param source     the name of the source
+     * @param syntaxName the name of the surface syntax, or {@code null}
      */
     public Script {
         items = List.copyOf(items);
     }
 
-    /**
-     * The version this script targets, which is {@code 1.1} when no pragma is written.
-     *
-     * @return the version string
-     */
-    public String version() {
-        return pragma == null ? "1.1" : pragma.version();
-    }
 
     /**
      * Every command of the script, blocks included, flattened in source order.
@@ -81,9 +72,6 @@ public record Script(
     @Override
     public String toString() {
         StringBuilder sb = new StringBuilder();
-        if (pragma != null) {
-            sb.append(pragma).append(System.lineSeparator());
-        }
         for (Item i : items) {
             sb.append(i).append(System.lineSeparator());
         }

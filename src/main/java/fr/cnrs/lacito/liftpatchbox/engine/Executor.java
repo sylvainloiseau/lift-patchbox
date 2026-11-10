@@ -120,12 +120,6 @@ public final class Executor {
     public Plan run(Script script, boolean planOnly) {
         operationIndex = 0;
         LiftPatchError failure = null;
-        if (script.recognizedLines() == 0) {
-            warn(LiftPatchWarning.document(fr.cnrs.lacito.liftpatchbox.parser.SyntaxWarningCode.NO_COMMAND_RECOGNIZED,
-                "not one line of " + script.source() + " was recognized as a command; if this is "
-                    + "a reference-syntax script, declare it with %liftpatch 1.1 "
-                    + "syntax=\"LiftPatchRef\" or pass the syntax explicitly"));
-        }
         try {
             executeItems(script.items(), null);
         } catch (LiftPatchException e) {
@@ -150,7 +144,7 @@ public final class Executor {
 
         return new Plan(
             script.source(),
-            script.syntax(),
+            script.syntaxName(),
             script.allCommands().size(),
             metamodel.version(),
             metamodel.metamodelId(),

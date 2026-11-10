@@ -15,12 +15,10 @@ import fr.cnrs.lacito.liftpatchbox.ast.LangText;
 import fr.cnrs.lacito.liftpatchbox.ast.LiftPatch;
 import fr.cnrs.lacito.liftpatchbox.ast.Multiplicity;
 import fr.cnrs.lacito.liftpatchbox.ast.Operator;
-import fr.cnrs.lacito.liftpatchbox.ast.Pragma;
 import fr.cnrs.lacito.liftpatchbox.ast.Predicate;
 import fr.cnrs.lacito.liftpatchbox.ast.PropertyRef;
 import fr.cnrs.lacito.liftpatchbox.ast.Script;
 import fr.cnrs.lacito.liftpatchbox.ast.Step;
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.ast.Value;
 import fr.cnrs.lacito.liftpatchbox.ast.Verb;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
@@ -114,12 +112,12 @@ public final class ShortScriptParser {
      * Parse a whole document.
      *
      * @param document the document text, commands and prose alike
-     * @return the script
+     * @return the script, with its pragma
      * @throws LiftPatchException with a static error code when a line that the
      *         recognition rule accepts does not parse, or breaks one of the rules
      *         the grammar cannot express
      */
-    public Script parse(String document) {
+    public SourceScript parse(String document) {
         ShortLinePreprocessor.Scan scan = new ShortLinePreprocessor(source).scan(document);
         operationCounter = 0;
 
@@ -172,7 +170,8 @@ public final class ShortScriptParser {
         for (Object o : root.body) {
             items.add(toItem(o));
         }
-        return new Script(pragma, items, Syntax.CONCISE, source, scan.commandCount());
+        return new SourceScript(new Script(items, source, Syntax.CONCISE.pragmaName()),
+            pragma, Syntax.CONCISE, scan.commandCount());
     }
 
     /**

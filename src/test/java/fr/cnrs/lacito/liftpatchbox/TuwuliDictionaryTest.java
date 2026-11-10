@@ -12,7 +12,7 @@ import fr.cnrs.lacito.liftapi.model.Form;
 import fr.cnrs.lacito.liftapi.model.LiftEntry;
 import fr.cnrs.lacito.liftapi.model.LiftSense;
 import fr.cnrs.lacito.liftapi.model.LiftVariant;
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
+import fr.cnrs.lacito.liftpatchbox.parser.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;

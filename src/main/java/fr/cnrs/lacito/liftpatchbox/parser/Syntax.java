@@ -1,4 +1,4 @@
-package fr.cnrs.lacito.liftpatchbox.ast;
+package fr.cnrs.lacito.liftpatchbox.parser;
 
 /**
  * The two surface syntaxes of the LiftPatch language.

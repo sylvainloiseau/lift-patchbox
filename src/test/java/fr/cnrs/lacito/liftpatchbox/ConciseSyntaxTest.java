@@ -3,7 +3,7 @@ package fr.cnrs.lacito.liftpatchbox;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
+import fr.cnrs.lacito.liftpatchbox.parser.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.parser.SyntaxErrorCode;

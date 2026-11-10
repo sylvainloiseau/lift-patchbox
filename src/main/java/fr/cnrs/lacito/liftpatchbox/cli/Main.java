@@ -2,8 +2,8 @@ package fr.cnrs.lacito.liftpatchbox.cli;
 
 import fr.cnrs.lacito.liftapi.LiftDictionary;
 import fr.cnrs.lacito.liftpatchbox.LiftPatchBox;
-import fr.cnrs.lacito.liftpatchbox.ast.Script;
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
+import fr.cnrs.lacito.liftpatchbox.parser.SourceScript;
+import fr.cnrs.lacito.liftpatchbox.parser.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
@@ -171,7 +171,7 @@ public final class Main implements Callable<Integer> {
             // A parse error is raised before the validator runs and is the one error
             // the library does not log itself, so it is logged here. Everything else
             // is logged where it is raised, and is not repeated below.
-            Script script;
+            SourceScript script;
             try {
                 script = box.parseFile(commands, syntax == null ? null : syntax.syntax());
             } catch (LiftPatchException e) {

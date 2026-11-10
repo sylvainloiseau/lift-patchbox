@@ -15,12 +15,10 @@ import fr.cnrs.lacito.liftpatchbox.ast.LangText;
 import fr.cnrs.lacito.liftpatchbox.ast.LiftPatch;
 import fr.cnrs.lacito.liftpatchbox.ast.Multiplicity;
 import fr.cnrs.lacito.liftpatchbox.ast.Operator;
-import fr.cnrs.lacito.liftpatchbox.ast.Pragma;
 import fr.cnrs.lacito.liftpatchbox.ast.Predicate;
 import fr.cnrs.lacito.liftpatchbox.ast.PropertyRef;
 import fr.cnrs.lacito.liftpatchbox.ast.Script;
 import fr.cnrs.lacito.liftpatchbox.ast.Step;
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.ast.Value;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
@@ -74,9 +72,9 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
      * Build the whole script.
      *
      * @param ctx the {@code script} parse tree
-     * @return the script
+     * @return the script, with its pragma
      */
-    public Script buildScript(LiftPatchRefParser.ScriptContext ctx) {
+    public SourceScript buildScript(LiftPatchRefParser.ScriptContext ctx) {
         Pragma pragma = ctx.pragma() == null ? null : visitPragma(ctx.pragma());
         List<Item> items = new ArrayList<>();
         for (LiftPatchRefParser.ItemContext ic : ctx.item()) {
@@ -84,12 +82,11 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
         }
         LOGGER.log(Level.FINE, () ->
             "Parsed " + items.size() + " top-level item(s) from " + source);
-        LiftPatch.ScriptBuilder builder = LiftPatch.script(Syntax.REFERENCE)
-            .pragma(pragma)
-            .source(source)
-            .recognizedLines(items.size());
+        LiftPatch.ScriptBuilder builder = LiftPatch.script()
+            .syntaxName(Syntax.REFERENCE.pragmaName())
+            .source(source);
         items.forEach(builder::add);
-        return builder.build();
+        return new SourceScript(builder.build(), pragma, Syntax.REFERENCE, items.size());
     }
 
     @Override

@@ -16,7 +16,7 @@ import java.util.Map;
  * drive the engine without writing a script:</p>
  *
  * <pre>{@code
- * Script script = LiftPatch.script(Syntax.REFERENCE)
+ * Script script = LiftPatch.script()
  *     .add(LiftPatch.create("sense")
  *             .init("gloss", "en", "pig")
  *             .under(LiftPatch.chain(LiftPatch.step("entry").eq("form", "tww", "mami")))
@@ -49,11 +49,10 @@ public final class LiftPatch {
     /**
      * Start building a script.
      *
-     * @param syntax the surface syntax to record on the script
      * @return a new script builder
      */
-    public static ScriptBuilder script(Syntax syntax) {
-        return new ScriptBuilder(syntax);
+    public static ScriptBuilder script() {
+        return new ScriptBuilder();
     }
 
     /**
@@ -453,24 +452,22 @@ public final class LiftPatch {
     /** Builds a {@link Script}. */
     public static final class ScriptBuilder {
 
-        private final Syntax syntax;
         private final List<Item> items = new ArrayList<>();
-        private Pragma pragma;
         private String source = "<memory>";
-        private int recognizedLines = -1;
+        private String syntaxName;
 
-        private ScriptBuilder(Syntax syntax) {
-            this.syntax = syntax;
+        private ScriptBuilder() {
         }
 
         /**
-         * Declare the version pragma of the script.
+         * Name the surface syntax the script was written in, which the plan
+         * document reports. A script built in Java has none.
          *
-         * @param pragma the pragma, or {@code null} for none
+         * @param name the syntax name, such as {@code "LiftPatchRef"}, or {@code null}
          * @return this builder
          */
-        public ScriptBuilder pragma(Pragma pragma) {
-            this.pragma = pragma;
+        public ScriptBuilder syntaxName(String name) {
+            this.syntaxName = name;
             return this;
         }
 
@@ -482,18 +479,6 @@ public final class LiftPatch {
          */
         public ScriptBuilder source(String source) {
             this.source = source;
-            return this;
-        }
-
-        /**
-         * Record how many lines of the source were recognized as commands, which is
-         * what the {@code NO_COMMAND_RECOGNIZED} warning is based on.
-         *
-         * @param n the number of recognized command lines
-         * @return this builder
-         */
-        public ScriptBuilder recognizedLines(int n) {
-            this.recognizedLines = n;
             return this;
         }
 
@@ -525,8 +510,7 @@ public final class LiftPatch {
          * @return the script
          */
         public Script build() {
-            int recognized = recognizedLines >= 0 ? recognizedLines : items.size();
-            return new Script(pragma, items, syntax, source, recognized);
+            return new Script(items, source, syntaxName);
         }
     }
 

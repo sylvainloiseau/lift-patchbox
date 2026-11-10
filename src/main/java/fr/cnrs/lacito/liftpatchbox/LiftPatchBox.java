@@ -1,25 +1,20 @@
 package fr.cnrs.lacito.liftpatchbox;
 
 import fr.cnrs.lacito.liftapi.LiftDictionary;
-import fr.cnrs.lacito.liftpatchbox.ast.Script;
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
-import fr.cnrs.lacito.liftpatchbox.engine.Executor;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCollector;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
-import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
-import fr.cnrs.lacito.liftpatchbox.model.Journal;
-import fr.cnrs.lacito.liftpatchbox.model.LiftModel;
 import fr.cnrs.lacito.liftpatchbox.parser.ScriptParser;
+import fr.cnrs.lacito.liftpatchbox.parser.SourceScript;
+import fr.cnrs.lacito.liftpatchbox.parser.Syntax;
 import java.io.IOException;
 import java.nio.file.Path;
-import java.util.logging.Level;
-import java.util.logging.Logger;
 
 /**
- * The library's front door: parse a script, validate it, and either plan it or
- * apply it to a dictionary.
+ * The front door of the language: parse a script written in one of the two
+ * surface syntaxes, then validate it and either plan it or apply it to a
+ * dictionary through a {@link LiftPatchEngine}.
  *
  * <pre>{@code
  * LiftDictionary dictionary = LiftDictionary.loadDictionaryFromFile(new File("tww.lift"));
@@ -33,20 +28,13 @@ import java.util.logging.Logger;
  * }
  * }</pre>
  *
- * <p>The three phases are always run in the same order, and each is available on
- * its own for a caller that needs it: parsing, which yields the command model;
- * static validation, which reports every error that depends only on the script
- * and the metamodel and, when there is one, stops before the dictionary is
- * touched; and execution, which resolves against the dictionary and applies the
- * commands in one transaction.</p>
+ * <p>Parsing yields a {@link SourceScript}: the command model the engine runs, and
+ * what the text said about itself. The warnings the text calls for are reported
+ * in the plan ahead of those of execution.</p>
  */
 public final class LiftPatchBox {
 
-    private static final Logger LOGGER = Logger.getLogger(LiftPatchBox.class.getName());
-
-    private final Metamodel metamodel;
-    private String defaultObjectLanguage;
-    private String defaultMetaLanguage;
+    private final LiftPatchEngine engine;
 
     /**
      * A front door validating against the standard metamodel of Appendix A.
@@ -62,23 +50,18 @@ public final class LiftPatchBox {
      *                  component types and properties
      */
     public LiftPatchBox(Metamodel metamodel) {
-        this.metamodel = metamodel;
+        this.engine = new LiftPatchEngine(metamodel);
     }
 
     /**
      * Set the default object language, overriding the dictionary's first one.
      *
-     * <p>Part 1, section 2.1 makes the first language of the dictionary's list the
-     * fallback default. A caller that knows better — a test fixture, a project
-     * whose language list is not in the order the editor thinks in — states it
-     * here, and a {@code language-default} directive or a {@code with} header in
-     * the script still overrides it.</p>
-     *
      * @param language the language code, or {@code null} to use the dictionary's first
      * @return this instance
+     * @see LiftPatchEngine#withDefaultObjectLanguage(String)
      */
     public LiftPatchBox withDefaultObjectLanguage(String language) {
-        this.defaultObjectLanguage = language;
+        engine.withDefaultObjectLanguage(language);
         return this;
     }
 
@@ -87,19 +70,29 @@ public final class LiftPatchBox {
      *
      * @param language the language code, or {@code null} to use the dictionary's first
      * @return this instance
+     * @see LiftPatchEngine#withDefaultMetaLanguage(String)
      */
     public LiftPatchBox withDefaultMetaLanguage(String language) {
-        this.defaultMetaLanguage = language;
+        engine.withDefaultMetaLanguage(language);
         return this;
     }
 
     /**
-     * The metamodel this instance validates against.
+     * The metamodel this instance parses and validates against.
      *
      * @return the metamodel
      */
     public Metamodel metamodel() {
-        return metamodel;
+        return engine.metamodel();
+    }
+
+    /**
+     * The engine that validates, plans and applies the parsed scripts.
+     *
+     * @return the engine
+     */
+    public LiftPatchEngine engine() {
+        return engine;
     }
 
     // ===================================================================
@@ -112,11 +105,11 @@ public final class LiftPatchBox {
      * @param text   the script text
      * @param syntax the syntax to parse it with, or {@code null} to take it from the pragma
      * @param source the source name, used in diagnostics and plan documents
-     * @return the command model
+     * @return the parsed script
      * @throws LiftPatchException when the script does not parse
      */
-    public Script parse(String text, Syntax syntax, String source) {
-        return new ScriptParser(metamodel).parse(text, syntax, source);
+    public SourceScript parse(String text, Syntax syntax, String source) {
+        return new ScriptParser(engine.metamodel()).parse(text, syntax, source);
     }
 
     /**
@@ -125,70 +118,53 @@ public final class LiftPatchBox {
      * @param file   the file, read as UTF-8
      * @param syntax the syntax to parse it with, or {@code null} to take it from the
      *               pragma or from the file extension
-     * @return the command model
+     * @return the parsed script
      * @throws IOException        if the file cannot be read
      * @throws LiftPatchException when the script does not parse
      */
-    public Script parseFile(Path file, Syntax syntax) throws IOException {
-        return new ScriptParser(metamodel).parseFile(file, syntax);
+    public SourceScript parseFile(Path file, Syntax syntax) throws IOException {
+        return new ScriptParser(engine.metamodel()).parseFile(file, syntax);
     }
 
     // ===================================================================
-    // Validation
+    // Validation, planning and applying
     // ===================================================================
 
     /**
      * Run the static validation pass.
      *
-     * @param script the command model
+     * @param script the parsed script
      * @return the collected errors and warnings; empty when the script is free of
      *         static errors
      */
-    public ErrorCollector validate(Script script) {
-        return new fr.cnrs.lacito.liftpatchbox.validation.SemanticValidator(metamodel)
-            .validate(script);
+    public ErrorCollector validate(SourceScript script) {
+        return engine.validate(script.script());
     }
 
-    // ===================================================================
-    // Planning and applying
-    // ===================================================================
-
     /**
-     * Validate a script and resolve it against a dictionary without committing
-     * anything: the plan mode of Part 2, section 12.4.
+     * Validate a parsed script and resolve it against a dictionary without
+     * committing anything: the plan mode of Part 2, section 12.4.
      *
      * @param dictionary the dictionary to plan against
-     * @param script     the command model
+     * @param script     the parsed script
      * @return the plan document, whose status says whether the script would apply cleanly
      */
-    public Plan plan(LiftDictionary dictionary, Script script) {
-        return run(dictionary, script, true);
+    public Plan plan(LiftDictionary dictionary, SourceScript script) {
+        return engine.plan(dictionary, script.script()).withLeadingWarnings(script.warnings());
     }
 
     /**
-     * Validate a script and apply it to a dictionary in one transaction.
+     * Validate a parsed script and apply it to a dictionary in one transaction.
      *
      * @param dictionary the dictionary to patch
-     * @param script     the command model
+     * @param script     the parsed script
      * @return the plan document describing what was applied
      * @throws LiftPatchException when the script has a static error, in which case
      *                            nothing is applied, or when a command fails, in
      *                            which case everything already applied is rolled back
      */
-    public Plan apply(LiftDictionary dictionary, Script script) {
-        Plan plan = run(dictionary, script, false);
-        if (!plan.isOk()) {
-            throw new LiftPatchException(
-                plan.staticErrors().isEmpty()
-                    ? java.util.List.of(plan.error())
-                    : plan.staticErrors());
-        }
-        LOGGER.log(Level.INFO, () -> "Applied " + script.source() + ": "
-            + plan.summary().componentsCreated() + " component(s) created, "
-            + plan.summary().componentsDeleted() + " deleted, "
-            + plan.summary().propertiesSet() + " property value(s) written");
-        LOGGER.log(Level.FINE, () -> plan.summary().format());
-        return plan;
+    public Plan apply(LiftDictionary dictionary, SourceScript script) {
+        return engine.apply(dictionary, script.script()).withLeadingWarnings(script.warnings());
     }
 
     /**
@@ -215,31 +191,5 @@ public final class LiftPatchBox {
      */
     public Plan plan(LiftDictionary dictionary, String text, Syntax syntax, String source) {
         return plan(dictionary, parse(text, syntax, source));
-    }
-
-    private Plan run(LiftDictionary dictionary, Script script, boolean planOnly) {
-        ErrorCollector errors = validate(script);
-        if (errors.hasErrors()) {
-            // A script containing a static error changes nothing, and every static
-            // error is reported before any command is applied (section 12.3).
-            return Plan.ofStaticErrors(script.source(), script.syntax(), metamodel.version(),
-                errors.errors(), errors.warnings());
-        }
-        Journal journal = new Journal();
-        LiftModel model = new LiftModel(dictionary, metamodel, journal);
-        Executor executor = new Executor(model, metamodel, journal);
-        applyDefaultLanguages(executor, model);
-        return executor.run(script, planOnly);
-    }
-
-    private void applyDefaultLanguages(Executor executor, LiftModel model) {
-        if (defaultObjectLanguage != null
-            && model.hasLanguage(LanguageKind.OBJECT, defaultObjectLanguage)) {
-            executor.bindDefaultLanguage(LanguageKind.OBJECT, defaultObjectLanguage);
-        }
-        if (defaultMetaLanguage != null
-            && model.hasLanguage(LanguageKind.META, defaultMetaLanguage)) {
-            executor.bindDefaultLanguage(LanguageKind.META, defaultMetaLanguage);
-        }
     }
 }

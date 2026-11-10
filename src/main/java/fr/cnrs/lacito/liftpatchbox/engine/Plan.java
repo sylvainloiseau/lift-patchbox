@@ -1,6 +1,5 @@
 package fr.cnrs.lacito.liftpatchbox.engine;
 
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchWarning;
 import java.util.List;
@@ -18,7 +17,8 @@ import java.util.List;
  * commit.</p>
  *
  * @param source             the name of the script's source
- * @param syntax             the surface syntax it was parsed with
+ * @param syntax             the name of the surface syntax it was parsed with, or
+ *                           {@code null} for a script built in Java
  * @param commandCount       how many commands the script contains
  * @param metamodelVersion   the version of the metamodel it was validated against
  * @param metamodelId        the identifier of an extended metamodel, or {@code null}
@@ -31,7 +31,7 @@ import java.util.List;
  */
 public record Plan(
     String source,
-    Syntax syntax,
+    String syntax,
     int commandCount,
     String metamodelVersion,
     String metamodelId,
@@ -47,7 +47,7 @@ public record Plan(
      * Canonical constructor, taking unmodifiable copies of the lists.
      *
      * @param source             the name of the script's source
-     * @param syntax             the surface syntax
+     * @param syntax             the surface syntax name, or {@code null}
      * @param commandCount       how many commands the script contains
      * @param metamodelVersion   the metamodel version
      * @param metamodelId        the extended metamodel identifier, or {@code null}
@@ -70,18 +70,35 @@ public record Plan(
      * no operation is resolved.
      *
      * @param source       the name of the script's source
-     * @param syntax       the surface syntax
+     * @param syntax       the surface syntax name, or {@code null}
      * @param metamodel    the metamodel version
      * @param errors       the static errors
      * @param warnings     the warnings
      * @return the plan
      */
     public static Plan ofStaticErrors(
-        String source, Syntax syntax, String metamodel,
+        String source, String syntax, String metamodel,
         List<LiftPatchError> errors, List<LiftPatchWarning> warnings
     ) {
         return new Plan(source, syntax, 0, metamodel, null, "error",
             errors, warnings, List.of(), List.of(), new Summary());
+    }
+
+    /**
+     * This plan with further warnings reported ahead of its own, such as the
+     * warnings a parser raises about the text of the script.
+     *
+     * @param leading the warnings to put first
+     * @return a plan equal to this one but for its warnings
+     */
+    public Plan withLeadingWarnings(List<LiftPatchWarning> leading) {
+        if (leading.isEmpty()) {
+            return this;
+        }
+        List<LiftPatchWarning> all = new java.util.ArrayList<>(leading);
+        all.addAll(warnings);
+        return new Plan(source, syntax, commandCount, metamodelVersion, metamodelId, status,
+            staticErrors, all, operations, danglingReferences, summary);
     }
 
     /**
@@ -129,7 +146,7 @@ public record Plan(
         sb.append("{\n");
         sb.append("  \"liftpatchPlan\": \"1.0\",\n");
         sb.append("  \"script\": { \"source\": ").append(quote(source))
-            .append(", \"syntax\": ").append(quote(syntax.pragmaName()))
+            .append(", \"syntax\": ").append(quote(syntax))
             .append(", \"commands\": ").append(commandCount).append(" },\n");
         sb.append("  \"metamodel\": { \"version\": ").append(quote(metamodelVersion))
             .append(", \"metamodelId\": ").append(quote(metamodelId)).append(" },\n");

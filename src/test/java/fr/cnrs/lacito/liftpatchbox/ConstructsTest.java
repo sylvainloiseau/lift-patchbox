@@ -690,14 +690,14 @@ class ConstructsTest extends PatchTestSupport {
             // editing the map. Nothing else in the suite reaches this path.
             Plan plan = box.plan(dictionary,
                 "c /mami/pig/\"a mami jefo\" o(\"free\", \"I shot it\")",
-                fr.cnrs.lacito.liftpatchbox.ast.Syntax.CONCISE, "<test>");
+                fr.cnrs.lacito.liftpatchbox.parser.Syntax.CONCISE, "<test>");
             assertTrue(plan.isOk(), () -> String.valueOf(plan.error()));
             assertEffects(plan,
                 "created:translation@null", "set:type=free", "set:text@en=I shot it");
             // The example is left as it was: its second example still has none.
             assertEffects(box.plan(dictionary,
                 "c /mami/pig/\"a mami jefo\" o(\"free\", \"I shot it\")",
-                fr.cnrs.lacito.liftpatchbox.ast.Syntax.CONCISE, "<test>"),
+                fr.cnrs.lacito.liftpatchbox.parser.Syntax.CONCISE, "<test>"),
                 "created:translation@null", "set:type=free", "set:text@en=I shot it");
         }
 
@@ -717,7 +717,7 @@ class ConstructsTest extends PatchTestSupport {
         void warnsWhenNothingWasRecognized() {
             Plan plan = box.plan(dictionary,
                 "create sense(gloss@en = \"puppy\") under entry[form@tww = \"memi\"]",
-                fr.cnrs.lacito.liftpatchbox.ast.Syntax.CONCISE, "<test>");
+                fr.cnrs.lacito.liftpatchbox.parser.Syntax.CONCISE, "<test>");
             assertTrue(plan.isOk());
             assertEffects(plan);
             assertEquals("NO_COMMAND_RECOGNIZED", plan.warnings().get(0).code().id());

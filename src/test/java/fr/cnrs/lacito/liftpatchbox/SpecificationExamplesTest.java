@@ -3,7 +3,7 @@ package fr.cnrs.lacito.liftpatchbox;
 import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import fr.cnrs.lacito.liftpatchbox.ast.Script;
+import fr.cnrs.lacito.liftpatchbox.parser.SourceScript;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCollector;
@@ -94,7 +94,7 @@ class SpecificationExamplesTest {
     private void check(SpecificationExamples.Example example) {
         ErrorCode expected = expectedFailure(example);
 
-        Script script;
+        SourceScript script;
         try {
             script = box.parse(example.script(), example.syntax(), example.label());
         } catch (LiftPatchException e) {

@@ -1,4 +1,4 @@
-package fr.cnrs.lacito.liftpatchbox.ast;
+package fr.cnrs.lacito.liftpatchbox.parser;
 
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
 import java.util.Map;

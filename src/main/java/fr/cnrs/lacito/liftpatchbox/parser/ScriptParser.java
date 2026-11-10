@@ -1,8 +1,5 @@
 package fr.cnrs.lacito.liftpatchbox.parser;
 
-import fr.cnrs.lacito.liftpatchbox.ast.Pragma;
-import fr.cnrs.lacito.liftpatchbox.ast.Script;
-import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
@@ -69,7 +66,7 @@ public final class ScriptParser {
      * @throws LiftPatchException when the script does not parse, or declares an
      *         unsupported version, metamodel or pragma attribute
      */
-    public Script parse(String text, Syntax syntax, String source) {
+    public SourceScript parse(String text, Syntax syntax, String source) {
         Syntax declared = declaredSyntax(text);
         Syntax effective = declared != null ? declared : syntax;
         if (effective == null) {
@@ -83,7 +80,7 @@ public final class ScriptParser {
         LOGGER.log(Level.FINE, () ->
             "Parsing " + source + " as " + effective.pragmaName());
 
-        Script script = effective == Syntax.REFERENCE
+        SourceScript script = effective == Syntax.REFERENCE
             ? parseReference(text, source)
             : new ShortScriptParser(source, metamodel).parse(text);
         checkPragma(script.pragma());
@@ -100,7 +97,7 @@ public final class ScriptParser {
      * @throws IOException        if the file cannot be read
      * @throws LiftPatchException when the script does not parse
      */
-    public Script parseFile(Path file, Syntax syntax) throws IOException {
+    public SourceScript parseFile(Path file, Syntax syntax) throws IOException {
         String text = Files.readString(file, StandardCharsets.UTF_8);
         Syntax effective = syntax != null
             ? syntax
@@ -108,7 +105,7 @@ public final class ScriptParser {
         return parse(text, effective, file.getFileName().toString());
     }
 
-    private Script parseReference(String text, String source) {
+    private SourceScript parseReference(String text, String source) {
         LiftPatchRefLexer lexer = new LiftPatchRefLexer(CharStreams.fromString(text));
         CollectingErrorListener listener = new CollectingErrorListener();
         lexer.removeErrorListeners();
