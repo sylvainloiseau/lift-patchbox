@@ -38,7 +38,7 @@ create exemple(text="A mamimo jefimwij")
 
 set value = "Noun" on category of sense[gloss="pig"] of entry[form="mami"]
 
-A very usefull construct
+# A very usefull construct
 p /mami/pig         # - create new mami entry with the sense "pig"
                     #   if no mami entry exist
                     #   or if none of the mami entry has the sense "pig"
