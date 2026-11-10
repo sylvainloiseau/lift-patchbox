@@ -7,7 +7,6 @@ import fr.cnrs.lacito.liftapi.LiftDictionary;
 import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Effect;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorKind;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
@@ -82,7 +81,7 @@ class ConformanceCorpusTest {
         String id, LiftPatchBox box, LiftDictionary dictionary,
         String script, Syntax syntax, Map<String, Object> expect
     ) {
-        ErrorCode expected = ErrorCode.valueOf(Json.string(expect, "code"));
+        String expected = Json.string(expect, "code");
         ErrorKind expectedKind = "static".equals(Json.string(expect, "kind"))
             ? ErrorKind.STATIC : ErrorKind.DYNAMIC;
         int expectedIndex = Json.integer(expect, "commandIndex", 0);
@@ -100,7 +99,7 @@ class ConformanceCorpusTest {
             actual = e.firstError();
         }
 
-        assertEquals(expected, actual.code(), id + ": wrong error code (" + actual.message() + ")");
+        assertEquals(expected, actual.code().id(), id + ": wrong error code (" + actual.message() + ")");
         assertEquals(expectedKind, actual.kind(), id + ": wrong error kind");
         if (expectedIndex > 0) {
             assertEquals(expectedIndex, actual.operationIndex(), id + ": wrong operation index");
@@ -132,7 +131,7 @@ class ConformanceCorpusTest {
             expectedWarnings.add(Json.string(warning, "code"));
         }
         assertEquals(expectedWarnings,
-            plan.warnings().stream().map(w -> w.code().name()).toList(),
+            plan.warnings().stream().map(w -> w.code().id()).toList(),
             id + ": warnings differ");
 
         List<String> expectedDangling = new ArrayList<>();

@@ -67,7 +67,7 @@ public record LiftPatchError(
     public String format() {
         StringBuilder sb = new StringBuilder();
         sb.append(code.kind() == ErrorKind.STATIC ? "static error " : "error ");
-        sb.append('[').append(code).append(']');
+        sb.append('[').append(code.id()).append(']');
         if (position.isKnown()) {
             sb.append(" at ").append(position);
         }

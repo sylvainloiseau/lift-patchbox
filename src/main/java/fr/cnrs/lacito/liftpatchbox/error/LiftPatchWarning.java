@@ -33,7 +33,7 @@ public record LiftPatchWarning(
      * @return the code, the position and the message
      */
     public String format() {
-        StringBuilder sb = new StringBuilder("warning [").append(code).append(']');
+        StringBuilder sb = new StringBuilder("warning [").append(code.id()).append(']');
         if (position.isKnown()) {
             sb.append(" at ").append(position);
         }

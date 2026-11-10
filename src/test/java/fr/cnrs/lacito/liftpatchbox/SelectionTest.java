@@ -2,7 +2,7 @@ package fr.cnrs.lacito.liftpatchbox;
 
 import static org.junit.jupiter.api.Assertions.assertEquals;
 
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -65,7 +65,7 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("S4: a form alone is ambiguous over homophones and is never resolved silently")
         void refusesAnAmbiguousForm() {
-            refused(ErrorCode.AMBIGUOUS_REFERENCE,
+            refused(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 "create sense(gloss@en = \"piglet\") under entry[form@tww = \"mami\"]");
         }
 
@@ -138,14 +138,14 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a selector that uses no strategy")
         void refusesAnIncompleteSelector() {
-            refused(ErrorCode.INCOMPLETE_SELECTOR,
+            refused(ModelErrorCode.INCOMPLETE_SELECTOR,
                 "delete relation[type = \"synonym\"] under entry[form@tww = \"memi\"]");
         }
 
         @Test
         @DisplayName("refuses a selector that combines two strategies")
         void refusesTwoStrategies() {
-            refused(ErrorCode.DUPLICATE_SELECTOR,
+            refused(ModelErrorCode.DUPLICATE_SELECTOR,
                 "delete sense[id = \"s-1\", gloss@en = \"pig\"] "
                     + "under entry[form@tww = \"mami\", hn = 1]");
         }
@@ -153,7 +153,7 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a predicate added to a complete strategy")
         void refusesAnAddedPredicate() {
-            refused(ErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
+            refused(ModelErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
                 """
                 set definition@fr = "Un animal"
                   on sense[gloss@en = "pig", definition@en = "A four-legged terrestrial animal"]
@@ -164,13 +164,13 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses hn written without a form")
         void refusesHnAlone() {
-            refused(ErrorCode.HN_CANNOT_BE_USED_ALONE, "delete entry[hn = 1]");
+            refused(ModelErrorCode.HN_CANNOT_BE_USED_ALONE, "delete entry[hn = 1]");
         }
 
         @Test
         @DisplayName("an hn that matches nothing is NOT_FOUND, not a code of its own")
         void anUnmatchedHnIsNotFound() {
-            refused(ErrorCode.NOT_FOUND, "ensure entry[form@tww = \"mami\", hn = 7]");
+            refused(ModelErrorCode.NOT_FOUND, "ensure entry[form@tww = \"mami\", hn = 7]");
         }
     }
 
@@ -194,7 +194,7 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("within fails when two candidate paths survive")
         void failsWhenTwoPathsSurvive() {
-            refused(ErrorCode.AMBIGUOUS_REFERENCE,
+            refused(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 """
                 set value = "Verb"
                   on category
@@ -206,7 +206,7 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("of requires the parent selector to be unique on its own")
         void ofRequiresAUniqueParent() {
-            refused(ErrorCode.AMBIGUOUS_REFERENCE,
+            refused(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 """
                 set value = "Verb"
                   on category
@@ -218,14 +218,14 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a chain that does not reach the root")
         void refusesAnIncompleteChain() {
-            refused(ErrorCode.INCOMPLETE_ANCESTOR_CHAIN,
+            refused(ModelErrorCode.INCOMPLETE_ANCESTOR_CHAIN,
                 "set value = \"Verb\" on category of sense[gloss@en = \"pig\"]");
         }
 
         @Test
         @DisplayName("refuses a chain that skips a level of the hierarchy")
         void refusesASkippedLevel() {
-            refused(ErrorCode.ILLEGAL_PARENT,
+            refused(ModelErrorCode.ILLEGAL_PARENT,
                 """
                 create note(type = "x", text@en = "y")
                   under example[text@tww = "a mami jefi"]
@@ -297,14 +297,14 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a filtering-only operator in a unique selector")
         void refusesAFilteringOperatorInAUniqueSelector() {
-            refused(ErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
+            refused(ModelErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
                 "delete sense[gloss@en != \"pig\"] under entry[form@tww = \"memi\"]");
         }
 
         @Test
         @DisplayName("refuses a pseudo-property in a filtering selector")
         void refusesAPseudoPropertyInAFilter() {
-            refused(ErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
+            refused(ModelErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
                 """
                 set definition@fr = "Un animal"
                   on sense[gloss@en = "pig"]
@@ -315,7 +315,7 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a regular expression on a reference property")
         void refusesARegexOnAReference() {
-            refused(ErrorCode.OPERATOR_NOT_APPLICABLE_TO_DATATYPE,
+            refused(ModelErrorCode.OPERATOR_NOT_APPLICABLE_TO_DATATYPE,
                 "delete all relation[target ~ entry[form@tww = \"mami\", hn = 1]] "
                     + "under entry[form@tww = \"memi\"]");
         }
@@ -341,7 +341,7 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("a parent step above a marked step keeps its own rules")
         void aParentAboveAMarkedStepKeepsItsRules() {
-            refused(ErrorCode.AMBIGUOUS_REFERENCE,
+            refused(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 """
                 delete all example[text@tww ~ "jef"]
                   under sense[gloss@en = "pig"]
@@ -352,7 +352,7 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a multiplicity keyword on a verb that operates on one component")
         void refusesMultiplicityOnCreate() {
-            refusedConcise(ErrorCode.MULTIPLICITY_NOT_ALLOWED,
+            refusedConcise(ModelErrorCode.MULTIPLICITY_NOT_ALLOWED,
                 "c* /e[f=\"memi\"] s(g=\"puppy\")");
         }
     }
@@ -376,7 +376,7 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a bare string as a reference value")
         void refusesABareString() {
-            refused(ErrorCode.REFERENCE_VALUE_MUST_BE_A_CHAIN,
+            refused(ModelErrorCode.REFERENCE_VALUE_MUST_BE_A_CHAIN,
                 "set type = \"see-also\" on relation[type = \"synonym\", target = \"e-1\"] "
                     + "of entry[form@tww = \"memi\"]");
         }
@@ -384,7 +384,7 @@ class SelectionTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a reference target that is neither an entry nor a sense")
         void refusesAnInvalidTarget() {
-            refused(ErrorCode.INVALID_TARGET,
+            refused(ModelErrorCode.INVALID_TARGET,
                 """
                 set target = example[text@tww = "a mami jefi"] of sense[gloss@en = "pig"]
                   of entry[form@tww = "mami", hn = 1]

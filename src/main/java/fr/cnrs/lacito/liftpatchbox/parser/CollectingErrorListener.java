@@ -1,5 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.parser;
 
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
@@ -61,7 +62,7 @@ public final class CollectingErrorListener extends BaseErrorListener {
     ) {
         SourcePosition position =
             new SourcePosition(line + lineOffset, charPositionInLine + 1 + columnOffset);
-        errors.add(LiftPatchError.of(ErrorCode.SYNTAX_ERROR, msg, position));
+        errors.add(LiftPatchError.of(ModelErrorCode.SYNTAX_ERROR, msg, position));
     }
 
     /**

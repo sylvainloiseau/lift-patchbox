@@ -3,7 +3,7 @@ package fr.cnrs.lacito.liftpatchbox;
 import static org.junit.jupiter.api.Assertions.assertEquals;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorKind;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import java.util.Optional;
@@ -133,7 +133,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses the wildcard, which assigns no single value")
         void refusesTheWildcard() {
-            refused(ErrorCode.WILDCARD_NOT_ALLOWED,
+            refused(ModelErrorCode.WILDCARD_NOT_ALLOWED,
                 """
                 set definition@* = "A pig"
                   on sense[gloss@en = "pig"]
@@ -144,7 +144,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a language the dictionary does not declare")
         void refusesAnUnknownLanguage() {
-            refused(ErrorCode.NO_SUCH_META_LANGUAGE,
+            refused(ModelErrorCode.NO_SUCH_META_LANGUAGE,
                 """
                 set definition@de = "Ein Schwein"
                   on sense[gloss@en = "pig"]
@@ -155,7 +155,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("checks the uniqueness invariant when it writes an identity property")
         void checksTheUniquenessInvariant() {
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 """
                 set gloss@en = "pork"
                   on sense[gloss@en = "pig"]
@@ -183,7 +183,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("tests the qualified value, not the property as a whole")
         void testsTheQualifiedValue() {
-            refused(ErrorCode.UNSET_QUALIFIED_PROPERTY,
+            refused(ModelErrorCode.UNSET_QUALIFIED_PROPERTY,
                 """
                 update definition@fr = "Un animal"
                   on sense[gloss@en = "pig"]
@@ -194,7 +194,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a scalar property that has no value")
         void refusesAnUnsetScalar() {
-            refused(ErrorCode.UNSET_PROPERTY,
+            refused(ModelErrorCode.UNSET_PROPERTY,
                 """
                 update value = "Noun"
                   on category
@@ -223,7 +223,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses to empty a required multitext")
         void refusesToEmptyARequiredMultitext() {
-            refused(ErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
+            refused(ModelErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
                 """
                 clear gloss@en
                   on sense[gloss@en = "taro"]
@@ -234,7 +234,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses the wildcard on a required multitext, whatever the state")
         void refusesTheWildcardOnARequiredMultitext() {
-            refused(ErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
+            refused(ModelErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
                 """
                 clear gloss@*
                   on sense[gloss@en = "pig"]
@@ -257,7 +257,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("requires an explicit qualifier on a multitext")
         void requiresAnExplicitQualifier() {
-            refused(ErrorCode.MISSING_LANGUAGE_QUALIFIER,
+            refused(ModelErrorCode.MISSING_LANGUAGE_QUALIFIER,
                 """
                 clear definition
                   on sense[gloss@en = "pig"]
@@ -282,7 +282,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a scalar identity property, which may never become unset")
         void refusesAScalarIdentityProperty() {
-            refused(ErrorCode.CANNOT_CLEAR_IDENTITY_PROPERTY,
+            refused(ModelErrorCode.CANNOT_CLEAR_IDENTITY_PROPERTY,
                 """
                 clear type
                   on relation#1
@@ -293,7 +293,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a qualified value that is not set")
         void refusesAnUnsetQualifiedValue() {
-            refused(ErrorCode.UNSET_QUALIFIED_PROPERTY,
+            refused(ModelErrorCode.UNSET_QUALIFIED_PROPERTY,
                 """
                 clear definition@fr
                   on sense[gloss@en = "pig"]
@@ -329,7 +329,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("may not be given the form of a sibling")
         void mayNotDuplicateASibling() {
             twoVariants();
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 "set form@tww = \"mamee\" on variant[form@tww = \"mamii\"] "
                     + "of entry[form@tww = \"mami\", hn = 1]");
         }
@@ -338,7 +338,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("may not lose its last qualified value")
         void mayNotLoseItsLastValue() {
             twoVariants();
-            refused(ErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
+            refused(ModelErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
                 "clear form@tww on variant[form@tww = \"mamii\"] "
                     + "of entry[form@tww = \"mami\", hn = 1]");
         }
@@ -412,7 +412,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         void refusesADuplicateTranslationKey() {
             applyConcise("c /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"] "
                 + "o(\"literal\", \"I shot a pig, precisely\")");
-            refusedConcise(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refusedConcise(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 "s /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"] "
                     + "o^free (y = \"literal\")");
         }
@@ -424,7 +424,7 @@ class PropertyCommandsTest extends PatchTestSupport {
                 + "under entry[form@tww = \"memi\"]");
             apply("create note(type = \"editorial\", text@en = \"two\") "
                 + "under entry[form@tww = \"memi\"]");
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 "set type = \"editorial\" on note^general of entry[form@tww = \"memi\"]");
         }
     }
@@ -461,7 +461,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("refuse set")
         void refuseSet() {
             aTrait();
-            refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+            refused(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "set type = \"syllable\" on trait^CVpattern of entry[form@tww = \"memi\"]");
         }
 
@@ -469,7 +469,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("refuse update")
         void refuseUpdate() {
             aTrait();
-            refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+            refused(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "update type = \"syllable\" on trait^CVpattern of entry[form@tww = \"memi\"]");
         }
 
@@ -477,7 +477,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("refuse clear, and report the read-only code rather than the identity one")
         void refuseClear() {
             aTrait();
-            refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+            refused(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "clear type on trait^CVpattern of entry[form@tww = \"memi\"]");
         }
 
@@ -485,7 +485,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("are refused before the dictionary is consulted")
         void areRefusedStatically() {
             // No trait exists, so a dynamic check would raise NOT_FOUND first.
-            LiftPatchError error = refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+            LiftPatchError error = refused(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "set type = \"syllable\" on trait^nothing of entry[form@tww = \"memi\"]");
             assertTrue(error.kind() == ErrorKind.STATIC, "the check must be static");
         }
@@ -494,7 +494,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("refuse the concise spelling too")
         void refuseTheConciseSpelling() {
             aTrait();
-            refusedConcise(ErrorCode.PROPERTY_IS_READ_ONLY,
+            refusedConcise(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "s /memi t^CVpattern (y = \"syllable\")");
         }
 
@@ -516,7 +516,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("include the type of a field: set is refused")
         void refuseSetOnAField() {
             aField();
-            refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+            refused(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "set type = \"review\" on field^editorial of entry[form@tww = \"memi\"]");
         }
 
@@ -524,7 +524,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("include the type of a field: update is refused")
         void refuseUpdateOnAField() {
             aField();
-            refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+            refused(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "update type = \"review\" on field^editorial of entry[form@tww = \"memi\"]");
         }
 
@@ -532,7 +532,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("include the type of a field: clear is refused")
         void refuseClearOnAField() {
             aField();
-            refused(ErrorCode.PROPERTY_IS_READ_ONLY,
+            refused(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "clear type on field^editorial of entry[form@tww = \"memi\"]");
         }
 
@@ -540,7 +540,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("include the type of a field, refused statically and in the concise spelling")
         void refuseTheTypeOfAFieldStatically() {
             // No field exists, so a dynamic check would raise NOT_FOUND first.
-            LiftPatchError error = refusedConcise(ErrorCode.PROPERTY_IS_READ_ONLY,
+            LiftPatchError error = refusedConcise(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "s /memi f^editorial (y = \"review\")");
             assertTrue(error.kind() == ErrorKind.STATIC, "the check must be static");
         }
@@ -562,7 +562,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a property the metamodel does not define on the component type")
         void refusesAnUndefinedProperty() {
-            refused(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+            refused(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                 """
                 set transcription@tww = "mami"
                   on sense[gloss@en = "pig"]
@@ -573,7 +573,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a language key on a scalar property")
         void refusesALanguageKeyOnAScalar() {
-            refused(ErrorCode.LANG_KEY_NOT_SUPPORTED_ON_SCALAR,
+            refused(ModelErrorCode.LANG_KEY_NOT_SUPPORTED_ON_SCALAR,
                 """
                 set value@en = "Noun"
                   on category
@@ -585,7 +585,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses the same qualified property twice in one command")
         void refusesADuplicateProperty() {
-            refused(ErrorCode.DUPLICATE_PROPERTY,
+            refused(ModelErrorCode.DUPLICATE_PROPERTY,
                 """
                 set definition@en = "A pig", definition@en = "Another pig"
                   on sense[gloss@en = "pig"]

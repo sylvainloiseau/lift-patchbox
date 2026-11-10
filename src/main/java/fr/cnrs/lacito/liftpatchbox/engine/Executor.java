@@ -17,12 +17,12 @@ import fr.cnrs.lacito.liftpatchbox.ast.Script;
 import fr.cnrs.lacito.liftpatchbox.ast.Step;
 import fr.cnrs.lacito.liftpatchbox.ast.Value;
 import fr.cnrs.lacito.liftpatchbox.ast.Verb;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchWarning;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
-import fr.cnrs.lacito.liftpatchbox.error.WarningCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelWarningCode;
 import fr.cnrs.lacito.liftapi.model.DuplicateTypeException;
 import fr.cnrs.lacito.liftpatchbox.metamodel.ComponentTypeDef;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
@@ -121,7 +121,7 @@ public final class Executor {
         operationIndex = 0;
         LiftPatchError failure = null;
         if (script.recognizedLines() == 0) {
-            warn(LiftPatchWarning.document(WarningCode.NO_COMMAND_RECOGNIZED,
+            warn(LiftPatchWarning.document(fr.cnrs.lacito.liftpatchbox.parser.SyntaxWarningCode.NO_COMMAND_RECOGNIZED,
                 "not one line of " + script.source() + " was recognized as a command; if this is "
                     + "a reference-syntax script, declare it with %liftpatch 1.1 "
                     + "syntax=\"LiftPatchRef\" or pass the syntax explicitly"));
@@ -246,7 +246,7 @@ public final class Executor {
 
     private Effect languageCreate(Directive.LanguageCreate d) {
         if (model.hasLanguage(d.kind(), d.language())) {
-            throw resolver.error(ErrorCode.LANGUAGE_ALREADY_EXISTS,
+            throw resolver.error(ModelErrorCode.LANGUAGE_ALREADY_EXISTS,
                 "the dictionary already has the " + d.kind().jsonName() + " language `"
                     + d.language() + "`",
                 d.position());
@@ -264,19 +264,19 @@ public final class Executor {
                 d.position());
         }
         if (model.languageCount(d.kind()) == 1) {
-            throw resolver.error(ErrorCode.CANNOT_DELETE_LAST_LANGUAGE,
+            throw resolver.error(ModelErrorCode.CANNOT_DELETE_LAST_LANGUAGE,
                 "`" + d.language() + "` is the only " + kind + " language of the dictionary, "
                     + "whose list of " + kind + " languages cannot be empty",
                 d.position());
         }
         if (model.languageInUse(d.kind(), d.language())) {
-            throw resolver.error(ErrorCode.LANGUAGE_IN_USE,
+            throw resolver.error(ModelErrorCode.LANGUAGE_IN_USE,
                 "texts of the dictionary are written in the " + kind + " language `"
                     + d.language() + "`",
                 d.position());
         }
         if (languages.isBound(d.kind(), d.language())) {
-            throw resolver.error(ErrorCode.LANGUAGE_IN_USE,
+            throw resolver.error(ModelErrorCode.LANGUAGE_IN_USE,
                 "`" + d.language() + "` is the default " + kind + " language bound in scope",
                 d.position());
         }
@@ -303,7 +303,7 @@ public final class Executor {
             // The one refusal left to the dictionary model, whose removal is
             // all-or-nothing: what the set holds itself does not count as a use, a
             // question only the model answers (Part 1, section 2.1.4).
-            throw resolver.error(ErrorCode.DECLARATION_IN_USE,
+            throw resolver.error(ModelErrorCode.DECLARATION_IN_USE,
                 "the feature set `" + d.name() + "` is in use: " + e.getMessage(),
                 d.position());
         }
@@ -339,7 +339,7 @@ public final class Executor {
         requireFeature(d.featureSet(), d.name(), d.position());
         requireNotExternal(d.featureSet(), d.position());
         if (model.featureInUse(d.featureSet(), d.name())) {
-            throw resolver.error(ErrorCode.DECLARATION_IN_USE,
+            throw resolver.error(ModelErrorCode.DECLARATION_IN_USE,
                 "the feature `" + d.name() + "` of `" + d.featureSet() + "` is in use",
                 d.position());
         }
@@ -375,12 +375,12 @@ public final class Executor {
     private Effect definitionDelete(Directive.DefinitionDelete d) {
         boolean field = d.kind() == Directive.DefinitionKind.FIELD;
         if (!model.hasDefinition(d.name()) || !model.definitionIsOfKind(d.name(), field)) {
-            throw resolver.error(ErrorCode.NO_SUCH_DECLARATION,
+            throw resolver.error(ModelErrorCode.NO_SUCH_DECLARATION,
                 "the dictionary declares no " + d.kind().jsonName() + " `" + d.name() + "`",
                 d.position());
         }
         if (model.definitionInUse(d.name())) {
-            throw resolver.error(ErrorCode.DECLARATION_IN_USE,
+            throw resolver.error(ModelErrorCode.DECLARATION_IN_USE,
                 "the " + d.kind().jsonName() + " definition `" + d.name()
                     + "` is used by a " + d.kind().jsonName() + " of the dictionary",
                 d.position());
@@ -393,7 +393,7 @@ public final class Executor {
 
     private void requireFeatureSet(String id, SourcePosition position) {
         if (!model.hasFeatureSet(id)) {
-            throw resolver.error(ErrorCode.NO_SUCH_DECLARATION,
+            throw resolver.error(ModelErrorCode.NO_SUCH_DECLARATION,
                 "the dictionary declares no feature set `" + id + "`", position);
         }
     }
@@ -401,14 +401,14 @@ public final class Executor {
     private void requireFeature(String featureSet, String id, SourcePosition position) {
         requireFeatureSet(featureSet, position);
         if (!model.hasFeature(featureSet, id)) {
-            throw resolver.error(ErrorCode.NO_SUCH_DECLARATION,
+            throw resolver.error(ModelErrorCode.NO_SUCH_DECLARATION,
                 "the feature set `" + featureSet + "` has no feature `" + id + "`", position);
         }
     }
 
     private void requireNotBuiltIn(String id, String done, SourcePosition position) {
         if (model.isBuiltInFeatureSet(id)) {
-            throw resolver.error(ErrorCode.DECLARATION_IS_BUILT_IN,
+            throw resolver.error(ModelErrorCode.DECLARATION_IS_BUILT_IN,
                 "`" + id + "` is a built-in feature set, which cannot be " + done,
                 position);
         }
@@ -416,7 +416,7 @@ public final class Executor {
 
     private void requireNotExternal(String id, SourcePosition position) {
         if (model.isExternal(id)) {
-            throw resolver.error(ErrorCode.DECLARATION_IS_EXTERNAL,
+            throw resolver.error(ModelErrorCode.DECLARATION_IS_EXTERNAL,
                 "the feature set `" + id + "` is defined in an external ranges file, which is "
                     + "not written when the dictionary is saved, and cannot be changed",
                 position);
@@ -424,7 +424,7 @@ public final class Executor {
     }
 
     private LiftPatchException alreadyDeclared(String what, String name, SourcePosition position) {
-        return resolver.error(ErrorCode.DECLARATION_ALREADY_EXISTS,
+        return resolver.error(ModelErrorCode.DECLARATION_ALREADY_EXISTS,
             "the dictionary already declares the " + what + " `" + name + "`", position);
     }
 
@@ -514,7 +514,7 @@ public final class Executor {
         for (Initializer.Assignment assignment : constructor.assignments()) {
             PropertyRef ref = assignment.property();
             PropertyDef property = def.property(ref.name()).orElseThrow(() ->
-                resolver.error(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+                resolver.error(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                     "the metamodel defines no property `" + ref.name() + "` on a `"
                         + def.name() + "`",
                     ref.position()));
@@ -557,7 +557,7 @@ public final class Executor {
             : value instanceof Value.Num n ? Long.toString(n.value())
             : null;
         if (text == null) {
-            throw resolver.error(ErrorCode.SYNTAX_ERROR,
+            throw resolver.error(ModelErrorCode.SYNTAX_ERROR,
                 "a multitext property takes a literal value", position);
         }
         out.put(language, text);
@@ -576,7 +576,7 @@ public final class Executor {
 
         List<ComponentRef> matches = upsertMatches(parent, constructor, def);
         if (matches.size() > 1) {
-            throw resolver.error(ErrorCode.AMBIGUOUS_REFERENCE,
+            throw resolver.error(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 matches.size() + " components match the upsert, which must designate one",
                 constructor.position());
         }
@@ -789,7 +789,7 @@ public final class Executor {
             throw outOfRangeOrNotFound(command.target(), sourceParent);
         }
         if (found.size() > 1) {
-            throw resolver.error(ErrorCode.AMBIGUOUS_REFERENCE,
+            throw resolver.error(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 found.size() + " components match `" + command.target() + "`",
                 command.target().position());
         }
@@ -800,12 +800,12 @@ public final class Executor {
 
         String type = target.componentType();
         if (!metamodel.isLegalParent(destination.componentType(), type)) {
-            throw resolver.error(ErrorCode.ILLEGAL_PARENT,
+            throw resolver.error(ModelErrorCode.ILLEGAL_PARENT,
                 "a `" + destination.componentType() + "` cannot hold a `" + type + "`",
                 command.position());
         }
         if (isAncestorOrSelf(target, destination)) {
-            throw resolver.error(ErrorCode.SELF_ANCESTOR,
+            throw resolver.error(ModelErrorCode.SELF_ANCESTOR,
                 "a component cannot be moved under itself or under one of its own descendants",
                 command.position());
         }
@@ -817,7 +817,7 @@ public final class Executor {
         int to = movePosition(command.at(), destination, type, target, upperBound);
 
         if (sameParent && to == from) {
-            throw resolver.error(ErrorCode.MOVING_TO_CURRENT_POSITION,
+            throw resolver.error(ModelErrorCode.MOVING_TO_CURRENT_POSITION,
                 "the component already occupies position " + from, command.at().position());
         }
 
@@ -941,7 +941,7 @@ public final class Executor {
         PropertyDef property = requireProperty(def, ref, assignment.position());
         if (!property.datatype().isMultitext()) {
             if (model.scalar(component, property.name()).isEmpty()) {
-                throw resolver.error(ErrorCode.UNSET_PROPERTY,
+                throw resolver.error(ModelErrorCode.UNSET_PROPERTY,
                     "`update` replaces an existing value, and `" + property.qualifiedName()
                         + "` has none; `set` is the command to use",
                     assignment.position());
@@ -951,7 +951,7 @@ public final class Executor {
         for (String language
             : qualifiedValues(ref, property, assignment.value(), assignment.position()).keySet()) {
             if (model.qualified(component, property.name(), language).isEmpty()) {
-                throw resolver.error(ErrorCode.UNSET_QUALIFIED_PROPERTY,
+                throw resolver.error(ModelErrorCode.UNSET_QUALIFIED_PROPERTY,
                     "`update` tests the qualified value, not the property: `" + property.name()
                         + "@" + language + "` is not set, even if another language of `"
                         + property.name() + "` is",
@@ -974,7 +974,7 @@ public final class Executor {
         if (!property.datatype().isMultitext()) {
             String old = model.scalar(component, property.name()).orElse(null);
             if (old == null) {
-                throw resolver.error(ErrorCode.UNSET_PROPERTY,
+                throw resolver.error(ModelErrorCode.UNSET_PROPERTY,
                     "`" + property.qualifiedName() + "` has no value to remove", ref.position());
             }
             model.setScalar(component, property.name(), null);
@@ -987,13 +987,13 @@ public final class Executor {
 
         if (ref.wildcard()) {
             if (protectedMultitext) {
-                throw resolver.error(ErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
+                throw resolver.error(ModelErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
                     "`clear " + property.name() + "@*` would empty a required or identity "
                         + "multitext, and such a property may never become unset",
                     ref.position());
             }
             if (present.isEmpty()) {
-                throw resolver.error(ErrorCode.UNSET_PROPERTY,
+                throw resolver.error(ModelErrorCode.UNSET_PROPERTY,
                     "`" + property.qualifiedName() + "` has no value to remove", ref.position());
             }
             for (String language : present) {
@@ -1006,11 +1006,11 @@ public final class Executor {
 
         String language = resolver.languageOf(ref, property, ref.position());
         if (!present.contains(language)) {
-            throw resolver.error(ErrorCode.UNSET_QUALIFIED_PROPERTY,
+            throw resolver.error(ModelErrorCode.UNSET_QUALIFIED_PROPERTY,
                 "`" + property.name() + "@" + language + "` is not set", ref.position());
         }
         if (protectedMultitext && present.size() == 1) {
-            throw resolver.error(ErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
+            throw resolver.error(ModelErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
                 "`" + property.qualifiedName() + "` is required and `" + language
                     + "` is its only value; `clear` is refused rather than allowed to produce a "
                     + "component that `create` would have rejected",
@@ -1029,7 +1029,7 @@ public final class Executor {
         ComponentTypeDef def, PropertyRef ref, SourcePosition position
     ) {
         return def.property(ref.name()).orElseThrow(() -> resolver.error(
-            ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+            ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
             "the metamodel defines no property `" + ref.name() + "` on a `" + def.name() + "`",
             position));
     }
@@ -1059,7 +1059,7 @@ public final class Executor {
             return List.of(resolver.label(label.name(), label.position()));
         }
         if (resolvedParent == null) {
-            throw resolver.error(ErrorCode.MISSING_PARENT_CLAUSE,
+            throw resolver.error(ModelErrorCode.MISSING_PARENT_CLAUSE,
                 "the command names no parent", target.position());
         }
         List<ComponentRef> found = resolver.resolveStepUnder(resolvedParent, target);
@@ -1067,7 +1067,7 @@ public final class Executor {
             throw outOfRangeOrNotFound(target, resolvedParent);
         }
         if (unique && found.size() > 1) {
-            throw resolver.error(ErrorCode.AMBIGUOUS_REFERENCE,
+            throw resolver.error(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 found.size() + " components match `" + target + "`", target.position());
         }
         return found;
@@ -1086,13 +1086,13 @@ public final class Executor {
         if (target instanceof Step.Component c && c.ordinal() != null) {
             int count = model.children(parent, c.componentType()).size();
             if (c.ordinal() > count) {
-                return resolver.error(ErrorCode.INDEX_OUT_OF_BOUNDS,
+                return resolver.error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
                     "the ordinal " + c.ordinal() + " is greater than the " + count
                         + " same-type sibling(s) under this parent",
                     target.position());
             }
         }
-        return resolver.error(ErrorCode.NOT_FOUND,
+        return resolver.error(ModelErrorCode.NOT_FOUND,
             "no component matches `" + target + "`", target.position());
     }
 
@@ -1116,7 +1116,7 @@ public final class Executor {
             case INDEX -> {
                 int n = at.index();
                 if (n > count + 1) {
-                    throw resolver.error(ErrorCode.INDEX_OUT_OF_BOUNDS,
+                    throw resolver.error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
                         "the valid insertion range is 1.." + (count + 1), at.position());
                 }
                 yield n;
@@ -1136,7 +1136,7 @@ public final class Executor {
             case INDEX -> {
                 int n = at.index();
                 if (n > upperBound) {
-                    throw resolver.error(ErrorCode.INDEX_OUT_OF_BOUNDS,
+                    throw resolver.error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
                         "the valid destination range is 1.." + upperBound, at.position());
                 }
                 yield n;
@@ -1173,7 +1173,7 @@ public final class Executor {
                 : component;
             if (typed.ordinal() != null) {
                 if (typed.ordinal() > siblings.size()) {
-                    throw resolver.error(ErrorCode.INDEX_OUT_OF_BOUNDS,
+                    throw resolver.error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
                         "the ordinal " + typed.ordinal() + " is greater than the "
                             + siblings.size() + " same-type sibling(s)",
                         at.position());
@@ -1188,17 +1188,17 @@ public final class Executor {
             }
         }
         if (matches.isEmpty()) {
-            throw resolver.error(ErrorCode.NOT_FOUND,
+            throw resolver.error(ModelErrorCode.NOT_FOUND,
                 "the `at` clause names no sibling of the component being placed", at.position());
         }
         if (matches.size() > 1) {
-            throw resolver.error(ErrorCode.AMBIGUOUS_REFERENCE,
+            throw resolver.error(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 "the `at` clause names " + matches.size() + " siblings and must name one",
                 at.position());
         }
         ComponentRef sibling = matches.get(0);
         if (moving != null && sibling.equals(moving)) {
-            throw resolver.error(ErrorCode.MOVING_TO_CURRENT_POSITION,
+            throw resolver.error(ModelErrorCode.MOVING_TO_CURRENT_POSITION,
                 "the `at` clause names the component being moved, which asks for the position it "
                     + "already occupies",
                 at.position());
@@ -1231,12 +1231,12 @@ public final class Executor {
         try {
             return mutation.get();
         } catch (DuplicateTypeException e) {
-            throw resolver.error(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            throw resolver.error(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 "two `" + def.name() + "` siblings would share the same `type`, which is the "
                     + "key their parent holds them by",
                 position);
         } catch (ExternalRangeException e) {
-            throw resolver.error(ErrorCode.DECLARATION_IS_EXTERNAL, e.getMessage(), position);
+            throw resolver.error(ModelErrorCode.DECLARATION_IS_EXTERNAL, e.getMessage(), position);
         }
     }
 
@@ -1279,7 +1279,7 @@ public final class Executor {
                     continue;
                 }
                 if (key.equals(identityKey(sibling, def, identity, language))) {
-                    throw resolver.error(ErrorCode.CANNOT_CREATE_DUPLICATE,
+                    throw resolver.error(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                         "two `" + def.name() + "` siblings would share the identity key "
                             + key + (language == null ? "" : " for the language `" + language + "`"),
                         position);
@@ -1318,7 +1318,7 @@ public final class Executor {
     // ===================================================================
 
     private void warnCommandAppliesToNoComponent(SourcePosition position, int index) {
-        warn(new LiftPatchWarning(WarningCode.COMMAND_APPLIES_TO_NO_COMPONENT,
+        warn(new LiftPatchWarning(ModelWarningCode.COMMAND_APPLIES_TO_NO_COMPONENT,
             "the marked target step matched no component; the command changes nothing, which is "
                 + "legal and worth saying out loud",
             position, index));

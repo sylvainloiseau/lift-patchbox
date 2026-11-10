@@ -22,7 +22,7 @@ import fr.cnrs.lacito.liftpatchbox.ast.Script;
 import fr.cnrs.lacito.liftpatchbox.ast.Step;
 import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.ast.Value;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
@@ -616,6 +616,6 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
 
     private static LiftPatchException syntaxError(String message, SourcePosition position) {
         return new LiftPatchException(
-            LiftPatchError.of(ErrorCode.SYNTAX_ERROR, message, position));
+            LiftPatchError.of(ModelErrorCode.SYNTAX_ERROR, message, position));
     }
 }

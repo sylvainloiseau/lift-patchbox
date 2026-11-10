@@ -138,7 +138,7 @@ public record Plan(
         sb.append("  \"staticErrors\": [");
         for (int i = 0; i < staticErrors.size(); i++) {
             LiftPatchError e = staticErrors.get(i);
-            sb.append(i > 0 ? ",\n    " : "\n    ").append("{ \"code\": ").append(quote(e.code().name()))
+            sb.append(i > 0 ? ",\n    " : "\n    ").append("{ \"code\": ").append(quote(e.code().id()))
                 .append(", \"message\": ").append(quote(e.message()))
                 .append(", \"position\": ").append(position(e.position())).append(" }");
         }
@@ -147,7 +147,7 @@ public record Plan(
         sb.append("  \"warnings\": [");
         for (int i = 0; i < warnings.size(); i++) {
             LiftPatchWarning w = warnings.get(i);
-            sb.append(i > 0 ? ",\n    " : "\n    ").append("{ \"code\": ").append(quote(w.code().name()))
+            sb.append(i > 0 ? ",\n    " : "\n    ").append("{ \"code\": ").append(quote(w.code().id()))
                 .append(", \"position\": ").append(position(w.position()))
                 .append(", \"operationIndex\": ")
                 .append(w.operationIndex() == 0 ? "null" : w.operationIndex()).append(" }");
@@ -215,7 +215,7 @@ public record Plan(
         if (o.error() == null) {
             sb.append("null");
         } else {
-            sb.append("{ \"code\": ").append(quote(o.error().code().name()))
+            sb.append("{ \"code\": ").append(quote(o.error().code().id()))
                 .append(", \"message\": ").append(quote(o.error().message()))
                 .append(", \"position\": ").append(position(o.error().position())).append(" }");
         }

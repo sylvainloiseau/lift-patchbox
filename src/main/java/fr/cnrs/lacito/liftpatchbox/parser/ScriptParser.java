@@ -3,7 +3,7 @@ package fr.cnrs.lacito.liftpatchbox.parser;
 import fr.cnrs.lacito.liftpatchbox.ast.Pragma;
 import fr.cnrs.lacito.liftpatchbox.ast.Script;
 import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
@@ -74,7 +74,7 @@ public final class ScriptParser {
         Syntax effective = declared != null ? declared : syntax;
         if (effective == null) {
             throw new LiftPatchException(LiftPatchError.of(
-                ErrorCode.SYNTAX_ERROR,
+                ModelErrorCode.SYNTAX_ERROR,
                 "the surface syntax of " + source + " is not declared by a pragma and was not "
                     + "given; pass --syntax, use a .liftpatch or .liftpatchs extension, or write "
                     + "%liftpatch 1.1 syntax=\"LiftPatchRef\"",
@@ -172,7 +172,7 @@ public final class ScriptParser {
         }
         if (!SUPPORTED_VERSION.equals(pragma.version())) {
             throw new LiftPatchException(LiftPatchError.of(
-                ErrorCode.UNSUPPORTED_LANGUAGE_VERSION,
+                SyntaxErrorCode.UNSUPPORTED_LANGUAGE_VERSION,
                 "this implementation supports LiftPatch " + SUPPORTED_VERSION
                     + ", and the script declares " + pragma.version(),
                 pragma.position()));
@@ -182,7 +182,7 @@ public final class ScriptParser {
                 && !name.equals(Pragma.METAMODEL)
                 && !name.equals(Pragma.SYNTAX)) {
                 throw new LiftPatchException(LiftPatchError.of(
-                    ErrorCode.UNKNOWN_PRAGMA_ATTRIBUTE,
+                    SyntaxErrorCode.UNKNOWN_PRAGMA_ATTRIBUTE,
                     "the version pragma of LiftPatch 1.1 carries `sigil`, `metamodel` and "
                         + "`syntax`, and no other attribute; found `" + name + "`",
                     pragma.position()));
@@ -191,7 +191,7 @@ public final class ScriptParser {
         String required = pragma.metamodel();
         if (required != null && !required.equals(metamodel.metamodelId())) {
             throw new LiftPatchException(LiftPatchError.of(
-                ErrorCode.UNSUPPORTED_METAMODEL,
+                SyntaxErrorCode.UNSUPPORTED_METAMODEL,
                 "the script requires the metamodel `" + required + "`, and the one loaded is `"
                     + (metamodel.metamodelId() == null ? "1.0" : metamodel.metamodelId()) + "`",
                 pragma.position()));

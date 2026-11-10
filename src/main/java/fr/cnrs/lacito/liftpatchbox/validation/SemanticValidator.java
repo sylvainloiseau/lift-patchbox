@@ -20,6 +20,7 @@ import fr.cnrs.lacito.liftpatchbox.ast.Script;
 import fr.cnrs.lacito.liftpatchbox.ast.Step;
 import fr.cnrs.lacito.liftpatchbox.ast.Value;
 import fr.cnrs.lacito.liftpatchbox.ast.Verb;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCollector;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
@@ -151,7 +152,7 @@ public final class SemanticValidator {
             case Directive.LanguageDelete x -> List.of();
         };
         if (names.stream().anyMatch(String::isBlank)) {
-            error(ErrorCode.SYNTAX_ERROR,
+            error(ModelErrorCode.SYNTAX_ERROR,
                 "the name of a feature set, a feature or a definition cannot be blank",
                 d.position());
         }
@@ -170,7 +171,7 @@ public final class SemanticValidator {
         } else {
             Optional<DataModel> named = DataModel.named(create.model());
             if (named.isEmpty()) {
-                error(ErrorCode.ILLEGAL_DATA_MODEL,
+                error(ModelErrorCode.ILLEGAL_DATA_MODEL,
                     "`" + create.model() + "` is not a data model; a " + create.kind().jsonName()
                         + " takes " + (field ? "`multitext` or `multistring`"
                             : "`string`, `integer`, `datetime`, `option`, `option-collection` "
@@ -180,7 +181,7 @@ public final class SemanticValidator {
             }
             model = named.get();
             if (field ? !model.forFields() : !model.forTraits()) {
-                error(ErrorCode.ILLEGAL_DATA_MODEL,
+                error(ModelErrorCode.ILLEGAL_DATA_MODEL,
                     "the data model `" + model.jsonName() + "` is not one of a "
                         + create.kind().jsonName(),
                     create.position());
@@ -188,12 +189,12 @@ public final class SemanticValidator {
             }
         }
         if (model.needsRange() && create.range() == null) {
-            error(ErrorCode.ILLEGAL_RANGE,
+            error(ModelErrorCode.ILLEGAL_RANGE,
                 "the data model `" + model.jsonName() + "` takes its values from a feature set, "
                     + "which `range = \"...\"` names",
                 create.position());
         } else if (!model.needsRange() && create.range() != null) {
-            error(ErrorCode.ILLEGAL_RANGE,
+            error(ModelErrorCode.ILLEGAL_RANGE,
                 "only an `option`, `option-collection` or `option-sequence` model takes a `range`",
                 create.position());
         }
@@ -221,13 +222,13 @@ public final class SemanticValidator {
                 Command command = anchor.command();
                 creation = command.verb() == Verb.CREATE;
                 if (command.verb() == Verb.DELETE) {
-                    error(ErrorCode.DELETE_CANNOT_BE_AN_ANCHOR,
+                    error(ModelErrorCode.DELETE_CANNOT_BE_AN_ANCHOR,
                         "the component a `delete` names is gone by the time the commands "
                             + "indented under it would run",
                         command.position());
                 }
                 if (command.verb() == Verb.MOVE) {
-                    error(ErrorCode.MOVE_NOT_ALLOWED_IN_BLOCK,
+                    error(ModelErrorCode.MOVE_NOT_ALLOWED_IN_BLOCK,
                         "a `move` names two parents while a block header supplies one; write it "
                             + "at top level",
                         command.position());
@@ -268,7 +269,7 @@ public final class SemanticValidator {
             case Command.Set s -> validateProperty(s.verb(), s.assignments(), List.of(), s.target(), ctx, s.position());
             case Command.Update u -> {
                 if (ctx.inCreationBlock()) {
-                    error(ErrorCode.CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK,
+                    error(ModelErrorCode.CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK,
                         "expecting a property to exist on a component the same script has just "
                             + "created makes no sense",
                         u.position());
@@ -291,14 +292,14 @@ public final class SemanticValidator {
         ComponentTypeDef def = type.get();
 
         if (def.isSingleton()) {
-            error(ErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
+            error(ModelErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
                 "a `" + def.name() + "` comes into existence with its host and is never created; "
                     + "write its properties with `set` once the host exists",
                 constructor.position());
             return;
         }
         if (Metamodel.ENTRY.equals(def.name()) && ctx.inBlock()) {
-            error(ErrorCode.ILLEGAL_PARENT,
+            error(ModelErrorCode.ILLEGAL_PARENT,
                 "a block header supplies a parent and an entry has none; create the entry at top "
                     + "level and write the block that fills it with that `create entry` as its header",
                 constructor.position());
@@ -323,13 +324,13 @@ public final class SemanticValidator {
         ComponentTypeDef def = type.get();
 
         if (ctx.inCreationBlock()) {
-            error(ErrorCode.CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK,
+            error(ModelErrorCode.CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK,
                 "a component the same script has just created cannot already have children to "
                     + "upsert",
                 constructor.position());
         }
         if (def.isSingleton()) {
-            error(ErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
+            error(ModelErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
                 "a `" + def.name() + "` is never created, so it is never upserted either",
                 constructor.position());
             return;
@@ -348,7 +349,7 @@ public final class SemanticValidator {
         }
         for (String identity : def.naturalIdentity()) {
             if (!given.contains(identity)) {
-                error(ErrorCode.MISSING_IDENTITY_PROPERTY,
+                error(ModelErrorCode.MISSING_IDENTITY_PROPERTY,
                     "an `upsert` on a `" + def.name() + "` must give its whole natural identity, "
                         + def.naturalIdentity() + "; `" + identity + "` is missing",
                     constructor.position());
@@ -356,7 +357,7 @@ public final class SemanticValidator {
         }
         validateInitializers(constructor, def, Verb.UPSERT, ctx);
         if (Metamodel.ENTRY.equals(def.name()) && constructor.conditions().isEmpty()) {
-            error(ErrorCode.UPSERT_ENTRY_WITHOUT_DISAMBIGUATION,
+            error(ModelErrorCode.UPSERT_ENTRY_WITHOUT_DISAMBIGUATION,
                 "without a `has` or `has-gloss` predicate this command could only ever create a "
                     + "new, possibly homophonous entry, which is what `create` already does",
                 constructor.position());
@@ -369,7 +370,7 @@ public final class SemanticValidator {
     private void validateEnsure(Command.Ensure command, Context ctx) {
         checkMultiplicity(Verb.ENSURE, command.target(), command.position());
         if (ctx.inCreationBlock()) {
-            error(ErrorCode.CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK,
+            error(ModelErrorCode.CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK,
                 "asserting the existence of a child of a component the same script has just "
                     + "created makes no sense",
                 command.position());
@@ -389,7 +390,7 @@ public final class SemanticValidator {
         if (targetType != null) {
             Optional<ComponentTypeDef> def = componentType(targetType, target.position());
             if (def.isPresent() && def.get().isSingleton()) {
-                error(ErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
+                error(ModelErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
                     "a `" + targetType + "` disappears only with its host; to empty it rather "
                         + "than remove it, clear its properties",
                     target.position());
@@ -408,13 +409,13 @@ public final class SemanticValidator {
 
     private void validateMove(Command.Move command, Context ctx) {
         if (ctx.inBlock()) {
-            error(ErrorCode.MOVE_NOT_ALLOWED_IN_BLOCK,
+            error(ModelErrorCode.MOVE_NOT_ALLOWED_IN_BLOCK,
                 "a `move` names two parents while a block header supplies one; write it at top "
                     + "level, where both of its parents are visible in the command itself",
                 command.position());
         }
         if (multiplicityOf(command.target()) != null) {
-            error(ErrorCode.MULTIPLICITY_NOT_ALLOWED,
+            error(ModelErrorCode.MULTIPLICITY_NOT_ALLOWED,
                 "`move` operates on exactly one component", command.position());
         }
         String targetType = stepType(command.target());
@@ -422,14 +423,14 @@ public final class SemanticValidator {
             Optional<ComponentTypeDef> def = componentType(targetType, command.target().position());
             if (def.isPresent()) {
                 if (def.get().isSingleton()) {
-                    error(ErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
+                    error(ModelErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
                         "a `" + targetType + "` is never moved: it comes into existence with its "
                             + "host and disappears with it",
                         command.target().position());
                     return;
                 }
                 if (!def.get().isOrdered()) {
-                    error(ErrorCode.COMPONENT_NOT_ORDERED,
+                    error(ModelErrorCode.COMPONENT_NOT_ORDERED,
                         "`move` changes a position, and a `" + targetType + "` has none; it is "
                             + "re-keyed by writing its `type` with `set`, and re-parented by "
                             + "deleting it and creating it under the new parent",
@@ -437,7 +438,7 @@ public final class SemanticValidator {
                     return;
                 }
                 if (Metamodel.ENTRY.equals(targetType)) {
-                    error(ErrorCode.SYNTAX_ERROR,
+                    error(ModelErrorCode.SYNTAX_ERROR,
                         "an entry has no parent and no sibling order to change: the dictionary, "
                             + "not the script, orders the entry list",
                         command.target().position());
@@ -456,7 +457,7 @@ public final class SemanticValidator {
         }
         Optional<ComponentTypeDef> def = componentType(targetType, command.target().position());
         if (command.at() == null) {
-            error(ErrorCode.SYNTAX_ERROR, "`move` requires an `at` clause", command.position());
+            error(ModelErrorCode.SYNTAX_ERROR, "`move` requires an `at` clause", command.position());
         } else if (def.isPresent()) {
             validateAtClause(command.at(), def.get(), command.position());
         }
@@ -475,7 +476,7 @@ public final class SemanticValidator {
         String componentType;
         if (target == null) {
             if (!ctx.inBlock()) {
-                error(ErrorCode.MISSING_PARENT_CLAUSE,
+                error(ModelErrorCode.MISSING_PARENT_CLAUSE,
                     "a property command written outside a block names the component it writes on "
                         + "with an `on` clause",
                     position);
@@ -517,7 +518,7 @@ public final class SemanticValidator {
         if (p.isReadOnly()) {
             // A read-only property is refused before its role, its datatype or its
             // current state is consulted (section 4.5).
-            error(ErrorCode.PROPERTY_IS_READ_ONLY,
+            error(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "`" + p.qualifiedName() + "` is fixed when the component is created and is "
                     + "never written again; to give it another value, delete the component and "
                     + "create it with the value wanted",
@@ -528,7 +529,7 @@ public final class SemanticValidator {
             return;
         }
         if (ref.wildcard()) {
-            error(ErrorCode.WILDCARD_NOT_ALLOWED,
+            error(ModelErrorCode.WILDCARD_NOT_ALLOWED,
                 "`" + verb.keyword() + "` writes exactly one qualified value; to write several "
                     + "languages at once, use a multi-language literal",
                 ref.position());
@@ -544,7 +545,7 @@ public final class SemanticValidator {
         }
         PropertyDef p = property.get();
         if (p.isReadOnly()) {
-            error(ErrorCode.PROPERTY_IS_READ_ONLY,
+            error(ModelErrorCode.PROPERTY_IS_READ_ONLY,
                 "`" + p.qualifiedName() + "` is fixed when the component is created and is "
                     + "never removed either",
                 ref.position());
@@ -552,7 +553,7 @@ public final class SemanticValidator {
         }
         if (p.datatype().isMultitext()) {
             if (!ref.hasQualifier()) {
-                error(ErrorCode.MISSING_LANGUAGE_QUALIFIER,
+                error(ModelErrorCode.MISSING_LANGUAGE_QUALIFIER,
                     "`clear` on a multitext requires an explicit qualifier: a language code, or "
                         + "the wildcard `@*`",
                     ref.position());
@@ -560,20 +561,20 @@ public final class SemanticValidator {
             }
         } else {
             if (ref.hasQualifier()) {
-                error(ErrorCode.LANG_KEY_NOT_SUPPORTED_ON_SCALAR,
+                error(ModelErrorCode.LANG_KEY_NOT_SUPPORTED_ON_SCALAR,
                     "`" + p.qualifiedName() + "` is a scalar property and takes no language key",
                     ref.position());
                 return;
             }
             if (p.identity()) {
-                error(ErrorCode.CANNOT_CLEAR_IDENTITY_PROPERTY,
+                error(ModelErrorCode.CANNOT_CLEAR_IDENTITY_PROPERTY,
                     "`" + p.qualifiedName() + "` belongs to the natural identity of a `"
                         + def.name() + "` and may never become unset",
                     ref.position());
                 return;
             }
             if (p.required()) {
-                error(ErrorCode.CANNOT_CLEAR_REQUIRED_PROPERTY,
+                error(ModelErrorCode.CANNOT_CLEAR_REQUIRED_PROPERTY,
                     "`" + p.qualifiedName() + "` is required at creation and may never become "
                         + "unset; `clear` is refused rather than allowed to produce a component "
                         + "that `create` would have rejected",
@@ -582,7 +583,7 @@ public final class SemanticValidator {
             }
         }
         if (!seen.add(ref.toString())) {
-            error(ErrorCode.DUPLICATE_PROPERTY,
+            error(ModelErrorCode.DUPLICATE_PROPERTY,
                 "`" + ref + "` is named twice in one command", ref.position());
         }
     }
@@ -614,7 +615,7 @@ public final class SemanticValidator {
                         continue;
                     }
                     if (ref.wildcard()) {
-                        error(ErrorCode.WILDCARD_NOT_ALLOWED,
+                        error(ModelErrorCode.WILDCARD_NOT_ALLOWED,
                             "an initializer designates exactly one qualified value",
                             ref.position());
                         continue;
@@ -624,7 +625,7 @@ public final class SemanticValidator {
                 }
                 case Initializer.Condition c -> {
                     if (verb == Verb.CREATE) {
-                        error(ErrorCode.COMMAND_NOT_ALLOWING_HAS,
+                        error(ModelErrorCode.COMMAND_NOT_ALLOWING_HAS,
                             "`has` and `has-gloss` are matching conditions, and `create` matches "
                                 + "nothing: the component being created has no children yet",
                             c.position());
@@ -632,7 +633,7 @@ public final class SemanticValidator {
                     }
                     if (c.predicate() instanceof Predicate.HasGloss
                         && !Metamodel.ENTRY.equals(def.name())) {
-                        error(ErrorCode.COMMAND_NOT_ALLOWING_HAS,
+                        error(ModelErrorCode.COMMAND_NOT_ALLOWING_HAS,
                             "`has-gloss` is an entry-only shorthand; on another component type, "
                                 + "write the `has` predicate out",
                             c.position());
@@ -649,7 +650,7 @@ public final class SemanticValidator {
                         continue;
                     }
                     if (child.get().isSingleton()) {
-                        error(ErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
+                        error(ModelErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
                             "a `" + child.get().name() + "` is never created",
                             e.position());
                         continue;
@@ -662,7 +663,7 @@ public final class SemanticValidator {
 
         for (PropertyDef p : def.properties().values()) {
             if (p.required() && !present.contains(p.name())) {
-                error(ErrorCode.MISSING_REQUIRED_PROPERTY,
+                error(ModelErrorCode.MISSING_REQUIRED_PROPERTY,
                     "`" + p.qualifiedName() + "` is required at creation"
                         + (p.datatype().isMultitext() ? ", with at least one qualified value" : ""),
                     constructor.position());
@@ -672,25 +673,25 @@ public final class SemanticValidator {
 
     private void reportPseudoPropertyInInitializer(PropertyRef ref, Verb verb) {
         switch (ref.name()) {
-            case "hn" -> error(ErrorCode.COMMAND_NOT_ALLOWING_HN,
+            case "hn" -> error(ModelErrorCode.COMMAND_NOT_ALLOWING_HN,
                 "`hn` cannot be given to a component that does not exist yet: asking to create "
                     + "\"the entry that is the second homophone\" is meaningless",
                 ref.position());
-            case "has-gloss" -> error(ErrorCode.COMMAND_NOT_ALLOWING_HAS,
+            case "has-gloss" -> error(ModelErrorCode.COMMAND_NOT_ALLOWING_HAS,
                 "`has-gloss` is a matching condition and never an assignment", ref.position());
             case "id" -> {
                 if (verb == Verb.UPSERT) {
-                    error(ErrorCode.ID_NOT_ALLOWED_ON_UPSERT,
+                    error(ModelErrorCode.ID_NOT_ALLOWED_ON_UPSERT,
                         "an `id` cannot be set, and a component that does not exist yet has none",
                         ref.position());
                 } else {
-                    error(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+                    error(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                         "`id` is system-managed: it can be referred to, and never created, set, "
                             + "updated or cleared",
                         ref.position());
                 }
             }
-            default -> error(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+            default -> error(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                 "`" + ref.name() + "` is a selection device and never an initializer",
                 ref.position());
         }
@@ -718,7 +719,7 @@ public final class SemanticValidator {
         if (ctx.inBlock()) {
             return ctx.parentType();
         }
-        error(ErrorCode.MISSING_PARENT_CLAUSE,
+        error(ModelErrorCode.MISSING_PARENT_CLAUSE,
             "a `" + def.name() + "` is not an entry, so the command names its parent with an `"
                 + keyword + "` clause",
             position);
@@ -744,7 +745,7 @@ public final class SemanticValidator {
         if (ctx.inBlock()) {
             return ctx.parentType();
         }
-        error(ErrorCode.MISSING_PARENT_CLAUSE,
+        error(ModelErrorCode.MISSING_PARENT_CLAUSE,
             "a target that is not an entry or a label needs a parent path",
             target.position());
         return null;
@@ -789,7 +790,7 @@ public final class SemanticValidator {
                 : (chain.axisAbove(i - 1) == Axis.STRICT
                     ? SelectorKind.UNIQUE : SelectorKind.FILTERING);
             if (steps.get(i).multiplicity() != null && !(i == 0 && headIsTarget)) {
-                error(ErrorCode.MULTIPLICITY_NOT_ALLOWED,
+                error(ModelErrorCode.MULTIPLICITY_NOT_ALLOWED,
                     "a multiplicity keyword marks the target step of a `delete`, a `set`, an "
                         + "`update` or a `clear`, and no parent step",
                     steps.get(i).position());
@@ -811,7 +812,7 @@ public final class SemanticValidator {
                 // child of the block's component.
                 validateParentage(ctx.parentType(), rootType, root.position());
             } else {
-                error(ErrorCode.INCOMPLETE_ANCESTOR_CHAIN,
+                error(ModelErrorCode.INCOMPLETE_ANCESTOR_CHAIN,
                     "the chain of ancestors must be continued up to the root; this one stops at a "
                         + "`" + rootType + "`",
                     root.position());
@@ -826,12 +827,12 @@ public final class SemanticValidator {
     private String validateStep(Step step, SelectorKind kind, String parentType) {
         if (step instanceof Step.Label label) {
             if (kind == SelectorKind.FILTERING) {
-                error(ErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
+                error(ModelErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
                     "a label already denotes exactly one component, so there is nothing to filter",
                     label.position());
             }
             if (!labels.isBound(label.name())) {
-                error(ErrorCode.UNKNOWN_LABEL,
+                error(ModelErrorCode.UNKNOWN_LABEL,
                     "no visible command has bound `$" + label.name() + "`", label.position());
             }
             return labels.typeOf(label.name()).orElse(null);
@@ -853,7 +854,7 @@ public final class SemanticValidator {
         // may contain at all (Part 1, section 3.1).
         if (component.ordinal() != null) {
             if (!def.isOrdered() || Metamodel.ENTRY.equals(def.name())) {
-                error(ErrorCode.COMPONENT_NOT_ORDERED,
+                error(ModelErrorCode.COMPONENT_NOT_ORDERED,
                     Metamodel.ENTRY.equals(def.name())
                         ? "the entry list is ordered by the dictionary and not by this language"
                         : "a `" + def.name() + "` lives in no ordered list, so it has no first "
@@ -862,10 +863,10 @@ public final class SemanticValidator {
                 return def.name();
             }
             if (component.ordinal() < 1) {
-                error(ErrorCode.ILLEGAL_ORDINAL, "an ordinal starts at 1", component.position());
+                error(ModelErrorCode.ILLEGAL_ORDINAL, "an ordinal starts at 1", component.position());
             }
             if (kind == SelectorKind.FILTERING) {
-                error(ErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
+                error(ModelErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
                     "an ordinal is a selection device and is forbidden in a filtering selector",
                     component.position());
             }
@@ -873,14 +874,14 @@ public final class SemanticValidator {
         }
         if (component.typeKey() != null) {
             if (!def.isTyped()) {
-                error(ErrorCode.COMPONENT_NOT_TYPED,
+                error(ModelErrorCode.COMPONENT_NOT_TYPED,
                     "a `" + def.name() + "` is not keyed by its `type`, so `^` names a key where "
                         + "there is none",
                     component.position());
                 return def.name();
             }
             if (kind == SelectorKind.FILTERING) {
-                error(ErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
+                error(ModelErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
                     "a type key is forbidden in a filtering selector; write the `type` predicate "
                         + "out, which is legal and says the same thing",
                     component.position());
@@ -888,7 +889,7 @@ public final class SemanticValidator {
             return def.name();
         }
         if (def.isSingleton() && kind == SelectorKind.UNIQUE && component.hasSelector()) {
-            error(ErrorCode.SINGLETON_TAKES_NO_SELECTOR,
+            error(ModelErrorCode.SINGLETON_TAKES_NO_SELECTOR,
                 "a host has exactly one `" + def.name() + "`, so there is nothing to choose among",
                 component.position());
             return def.name();
@@ -919,14 +920,14 @@ public final class SemanticValidator {
                         continue;
                     }
                     if (kind == SelectorKind.UNIQUE && c.operator().isFilteringOnly()) {
-                        error(ErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
+                        error(ModelErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
                             "`" + c.operator().spelling() + "` is not uniquely identifying and is "
                                 + "admitted in a filtering selector only",
                             c.position());
                         continue;
                     }
                     if (c.operator().isRegex() && !p.datatype().admitsRegex()) {
-                        error(ErrorCode.OPERATOR_NOT_APPLICABLE_TO_DATATYPE,
+                        error(ModelErrorCode.OPERATOR_NOT_APPLICABLE_TO_DATATYPE,
                             "`" + c.operator().spelling() + "` does not apply to a `"
                                 + p.datatype().jsonName() + "` property; matching a string "
                                 + "rendering of the value would be an implementation detail",
@@ -934,14 +935,14 @@ public final class SemanticValidator {
                         continue;
                     }
                     if (kind == SelectorKind.UNIQUE && c.property().wildcard()) {
-                        error(ErrorCode.WILDCARD_NOT_ALLOWED,
+                        error(ModelErrorCode.WILDCARD_NOT_ALLOWED,
                             "a unique selector designates one qualified value",
                             c.property().position());
                         continue;
                     }
                     checkPredicateValue(c.value(), p, c.position());
                     if (!seen.add(c.property().toString())) {
-                        error(ErrorCode.DUPLICATE_SELECTOR,
+                        error(ModelErrorCode.DUPLICATE_SELECTOR,
                             "the selector states `" + c.property() + "` twice", c.position());
                     }
                 }
@@ -951,7 +952,7 @@ public final class SemanticValidator {
                         continue;
                     }
                     if (e.property().wildcard()) {
-                        error(ErrorCode.WILDCARD_NOT_ALLOWED,
+                        error(ModelErrorCode.WILDCARD_NOT_ALLOWED,
                             "`exists(p@*)` would mean `exists(p)` and `absent(p@*)` would be "
                                 + "ambiguous; write `exists(p)` or `absent(p)`",
                             e.position());
@@ -967,7 +968,7 @@ public final class SemanticValidator {
                         checkQualifier(e.property(), property.get(), true);
                     }
                     if (kind == SelectorKind.UNIQUE) {
-                        error(ErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
+                        error(ModelErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
                             "`" + (e.absent() ? "absent" : "exists") + "` is not uniquely "
                                 + "identifying and is admitted in a filtering selector only",
                             e.position());
@@ -976,33 +977,33 @@ public final class SemanticValidator {
                 case Predicate.Has has -> validateStep(has.step(), SelectorKind.FILTERING, def.name());
                 case Predicate.Id id -> {
                     if (kind == SelectorKind.FILTERING) {
-                        error(ErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
+                        error(ModelErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
                             "`id` is forbidden in a filtering selector", id.position());
                     } else if (!isIdBearing(def)) {
-                        error(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+                        error(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                             "only an `entry` and a `sense` carry an `id`", id.position());
                     }
                 }
                 case Predicate.Hn hn -> {
                     if (kind == SelectorKind.FILTERING) {
-                        error(ErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
+                        error(ModelErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
                             "`hn` is forbidden in a filtering selector", hn.position());
                     } else if (!Metamodel.ENTRY.equals(def.name())) {
-                        error(ErrorCode.COMMAND_NOT_ALLOWING_HN,
+                        error(ModelErrorCode.COMMAND_NOT_ALLOWING_HN,
                             "`hn` disambiguates homophonous entries and applies to an `entry` only",
                             hn.position());
                     } else if (hn.value() < 1) {
-                        error(ErrorCode.ILLEGAL_HN,
+                        error(ModelErrorCode.ILLEGAL_HN,
                             "a homophone number is an integer greater than or equal to 1",
                             hn.position());
                     }
                 }
                 case Predicate.HasGloss hg -> {
                     if (kind == SelectorKind.FILTERING) {
-                        error(ErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
+                        error(ModelErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
                             "`has-gloss` is forbidden in a filtering selector", hg.position());
                     } else if (!Metamodel.ENTRY.equals(def.name())) {
-                        error(ErrorCode.COMMAND_NOT_ALLOWING_HAS,
+                        error(ModelErrorCode.COMMAND_NOT_ALLOWING_HAS,
                             "`has-gloss` is an entry-only shorthand; on another component type, "
                                 + "write `has sense[gloss@L = V]` out",
                             hg.position());
@@ -1010,10 +1011,10 @@ public final class SemanticValidator {
                 }
                 case Predicate.Index index -> {
                     if (kind == SelectorKind.FILTERING) {
-                        error(ErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
+                        error(ModelErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER,
                             "an ordinal is forbidden in a filtering selector", index.position());
                     } else if (index.value() < 1) {
-                        error(ErrorCode.ILLEGAL_ORDINAL, "an ordinal starts at 1", index.position());
+                        error(ModelErrorCode.ILLEGAL_ORDINAL, "an ordinal starts at 1", index.position());
                     }
                 }
             }
@@ -1041,7 +1042,7 @@ public final class SemanticValidator {
 
         if (hasId) {
             if (predicates.size() > 1) {
-                error(ErrorCode.DUPLICATE_SELECTOR,
+                error(ModelErrorCode.DUPLICATE_SELECTOR,
                     "an `id` selects on its own and states a whole strategy; it may not be "
                         + "combined with another predicate",
                     step.position());
@@ -1050,7 +1051,7 @@ public final class SemanticValidator {
         }
         if (hasIndex) {
             if (predicates.size() > 1) {
-                error(ErrorCode.DUPLICATE_SELECTOR,
+                error(ModelErrorCode.DUPLICATE_SELECTOR,
                     "the deprecated `index` predicate states a whole strategy and may not be "
                         + "combined with another predicate",
                     step.position());
@@ -1062,16 +1063,16 @@ public final class SemanticValidator {
             boolean hasForm = comparisons.stream().anyMatch(c -> c.property().name().equals("form"));
             if (!hasForm) {
                 if (hasHn) {
-                    error(ErrorCode.HN_CANNOT_BE_USED_ALONE,
+                    error(ModelErrorCode.HN_CANNOT_BE_USED_ALONE,
                         "`hn` selects the entry whose qualified form matches the accompanying "
                             + "`form` predicate, so it is never written alone",
                         step.position());
                 } else if (hasGloss) {
-                    error(ErrorCode.HAS_GLOSS_CANNOT_BE_USED_ALONE,
+                    error(ModelErrorCode.HAS_GLOSS_CANNOT_BE_USED_ALONE,
                         "`has-gloss` narrows a form lookup and is never written alone",
                         step.position());
                 } else {
-                    error(ErrorCode.INCOMPLETE_SELECTOR,
+                    error(ModelErrorCode.INCOMPLETE_SELECTOR,
                         "an `entry` is selected by a qualified `form`, by an `id`, or by a label",
                         step.position());
                 }
@@ -1080,14 +1081,14 @@ public final class SemanticValidator {
             boolean hasHasPredicate =
                 predicates.stream().anyMatch(p -> p instanceof Predicate.Has);
             if (hasHn && (hasGloss || hasHasPredicate)) {
-                error(ErrorCode.DUPLICATE_SELECTOR,
+                error(ModelErrorCode.DUPLICATE_SELECTOR,
                     "strategy S4 is refined by either one `hn` predicate or one or more `has` / "
                         + "`has-gloss` predicates, and not by both",
                     step.position());
             }
             for (Predicate.Comparison c : comparisons) {
                 if (!c.property().name().equals("form")) {
-                    error(ErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
+                    error(ModelErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
                         "a unique selector on an `entry` uses a qualified `form`, refined only by "
                             + "`hn`, `has` or `has-gloss`; `" + c.property().name()
                             + "` is an addition to the strategy",
@@ -1098,7 +1099,7 @@ public final class SemanticValidator {
         }
 
         if (def.hasEmptyIdentity()) {
-            error(ErrorCode.INCOMPLETE_SELECTOR,
+            error(ModelErrorCode.INCOMPLETE_SELECTOR,
                 "a `" + def.name() + "` has an empty natural identity property set, so no "
                     + "identity-based selection is available for it",
                 step.position());
@@ -1111,14 +1112,14 @@ public final class SemanticValidator {
             String name = c.property().name();
             if (identity.contains(name)) {
                 if (!given.add(name)) {
-                    error(ErrorCode.DUPLICATE_SELECTOR,
+                    error(ModelErrorCode.DUPLICATE_SELECTOR,
                         "a multitext identity property must be given exactly one qualified value "
                             + "in a unique selector: strategy S3 is an identity key for one "
                             + "language, and two languages would be two keys",
                         c.position());
                 }
             } else {
-                error(ErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
+                error(ModelErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
                     "a unique selector uses exactly one selection strategy and carries no "
                         + "additional predicate; `" + name + "` is not part of the natural "
                         + "identity of a `" + def.name() + "`",
@@ -1128,13 +1129,13 @@ public final class SemanticValidator {
         if (!given.containsAll(identity)) {
             List<String> missing = new ArrayList<>(identity);
             missing.removeAll(given);
-            error(ErrorCode.INCOMPLETE_SELECTOR,
+            error(ModelErrorCode.INCOMPLETE_SELECTOR,
                 "strategy S3 gives every property of the natural identity of a `" + def.name()
                     + "`, " + def.naturalIdentity() + "; " + missing + " missing",
                 step.position());
         }
         if (hasHn) {
-            error(ErrorCode.COMMAND_NOT_ALLOWING_HN,
+            error(ModelErrorCode.COMMAND_NOT_ALLOWING_HN,
                 "`hn` applies to an `entry` only", step.position());
         }
     }
@@ -1148,25 +1149,25 @@ public final class SemanticValidator {
             return;
         }
         if (Metamodel.ENTRY.equals(def.name())) {
-            error(ErrorCode.SYNTAX_ERROR,
+            error(ModelErrorCode.SYNTAX_ERROR,
                 "the dictionary, not the script, orders the entry list, so there is no position "
                     + "for an `at` clause to designate",
                 at.position());
             return;
         }
         if (!def.isOrdered()) {
-            error(ErrorCode.COMPONENT_NOT_ORDERED,
+            error(ModelErrorCode.COMPONENT_NOT_ORDERED,
                 "a `" + def.name() + "` lives in no ordered list, so an `at` clause names a "
                     + "position that does not exist",
                 at.position());
             return;
         }
         if (at.kind() == AtClause.Kind.INDEX && at.index() != null && at.index() < 1) {
-            error(ErrorCode.ILLEGAL_ORDINAL, "an index starts at 1", at.position());
+            error(ModelErrorCode.ILLEGAL_ORDINAL, "an index starts at 1", at.position());
         }
         if (at.step() instanceof Step.Component c && c.componentType() != null
             && !c.componentType().equals(def.name())) {
-            error(ErrorCode.SYNTAX_ERROR,
+            error(ModelErrorCode.SYNTAX_ERROR,
                 "the step of an `at before` / `at after` clause names a sibling of the component "
                     + "being placed, and a `" + c.componentType() + "` is not one of a `"
                     + def.name() + "`",
@@ -1187,19 +1188,19 @@ public final class SemanticValidator {
     ) {
         if (value instanceof Value.Multitext literal) {
             if (!p.datatype().isMultitext()) {
-                error(ErrorCode.LANG_KEY_NOT_SUPPORTED_ON_SCALAR,
+                error(ModelErrorCode.LANG_KEY_NOT_SUPPORTED_ON_SCALAR,
                     "a multi-language literal assigns qualified values, and `" + p.qualifiedName()
                         + "` is a scalar property",
                     position);
                 return;
             }
             if (ref.wildcard()) {
-                error(ErrorCode.WILDCARD_NOT_ALLOWED,
+                error(ModelErrorCode.WILDCARD_NOT_ALLOWED,
                     "a multi-language literal carries its own language keys", ref.position());
                 return;
             }
             if (ref.language() != null) {
-                error(ErrorCode.QUALIFIER_ON_MULTITEXT_LITERAL,
+                error(ModelErrorCode.QUALIFIER_ON_MULTITEXT_LITERAL,
                     "a multi-language literal carries its own language keys, and a qualifier in "
                         + "front of it can only contradict them",
                     ref.position());
@@ -1207,7 +1208,7 @@ public final class SemanticValidator {
             }
             for (LangText entry : literal.entries()) {
                 if (!seen.add(p.name() + "@" + entry.language())) {
-                    error(ErrorCode.DUPLICATE_PROPERTY,
+                    error(ModelErrorCode.DUPLICATE_PROPERTY,
                         "`" + p.name() + "@" + entry.language() + "` is assigned twice",
                         entry.position());
                 }
@@ -1218,13 +1219,13 @@ public final class SemanticValidator {
         if (p.datatype() == Datatype.REFERENCE) {
             checkReferenceValue(value, position);
         } else if (value instanceof Value.ChainRef || value instanceof Value.LabelRef) {
-            error(ErrorCode.REFERENCE_VALUE_MUST_BE_A_CHAIN,
+            error(ModelErrorCode.REFERENCE_VALUE_MUST_BE_A_CHAIN,
                 "`" + p.qualifiedName() + "` is not a reference property, so its value is a "
                     + "literal and not a component",
                 position);
         }
         if (!seen.add(ref.toString())) {
-            error(ErrorCode.DUPLICATE_PROPERTY,
+            error(ModelErrorCode.DUPLICATE_PROPERTY,
                 "`" + ref + "` is assigned twice in one command", position);
         }
     }
@@ -1245,7 +1246,7 @@ public final class SemanticValidator {
             case Value.ChainRef chain -> {
                 String type = stepType(chain.chain().head());
                 if (type != null && !isIdBearingName(type)) {
-                    error(ErrorCode.INVALID_TARGET,
+                    error(ModelErrorCode.INVALID_TARGET,
                         "the value of a reference property is an `entry` or a `sense`, and a `"
                             + type + "` is neither",
                         position);
@@ -1253,13 +1254,13 @@ public final class SemanticValidator {
             }
             case Value.LabelRef label -> {
                 if (!labels.isBound(label.name())) {
-                    error(ErrorCode.UNKNOWN_LABEL,
+                    error(ModelErrorCode.UNKNOWN_LABEL,
                         "no visible command has bound `$" + label.name() + "`", position);
                     return;
                 }
                 labels.typeOf(label.name()).ifPresent(type -> {
                     if (!isIdBearingName(type)) {
-                        error(ErrorCode.INVALID_TARGET,
+                        error(ModelErrorCode.INVALID_TARGET,
                             "the label `$" + label.name() + "` denotes a `" + type
                                 + "`, and the value of a reference property is an `entry` or a "
                                 + "`sense`",
@@ -1267,7 +1268,7 @@ public final class SemanticValidator {
                     }
                 });
             }
-            default -> error(ErrorCode.REFERENCE_VALUE_MUST_BE_A_CHAIN,
+            default -> error(ModelErrorCode.REFERENCE_VALUE_MUST_BE_A_CHAIN,
                 "a bare string is not a reference value: to assign a known id, select by id, as "
                     + "in `target = sense[id = \"pig-44\"]`",
                 position);
@@ -1285,14 +1286,14 @@ public final class SemanticValidator {
             return true;
         }
         if (!p.datatype().isMultitext()) {
-            error(ErrorCode.LANG_KEY_NOT_SUPPORTED_ON_SCALAR,
+            error(ModelErrorCode.LANG_KEY_NOT_SUPPORTED_ON_SCALAR,
                 "`" + p.qualifiedName() + "` is a `" + p.datatype().jsonName()
                     + "` property and takes no language key",
                 ref.position());
             return false;
         }
         if (ref.wildcard() && !allowWildcard) {
-            error(ErrorCode.WILDCARD_NOT_ALLOWED,
+            error(ModelErrorCode.WILDCARD_NOT_ALLOWED,
                 "`@*` is a reading and a removing qualifier, not an assigning one",
                 ref.position());
             return false;
@@ -1309,7 +1310,7 @@ public final class SemanticValidator {
             return;
         }
         if (!metamodel.isLegalParent(parentType, childType)) {
-            error(ErrorCode.ILLEGAL_PARENT,
+            error(ModelErrorCode.ILLEGAL_PARENT,
                 "the metamodel does not relate a `" + parentType + "` and a `" + childType
                     + "` as parent and child",
                 position);
@@ -1322,7 +1323,7 @@ public final class SemanticValidator {
         }
         Optional<ComponentTypeDef> def = metamodel.componentType(name);
         if (def.isEmpty()) {
-            error(ErrorCode.SYNTAX_ERROR,
+            error(ModelErrorCode.SYNTAX_ERROR,
                 "the metamodel declares no component type called `" + name + "`", position);
         }
         return def;
@@ -1333,7 +1334,7 @@ public final class SemanticValidator {
     ) {
         Optional<PropertyDef> p = def.property(ref.name());
         if (p.isEmpty()) {
-            error(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+            error(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                 "the metamodel defines no property `" + ref.name() + "` on a `" + def.name() + "`",
                 position);
         }
@@ -1361,7 +1362,7 @@ public final class SemanticValidator {
             return;
         }
         if (labels.isBound(name)) {
-            error(ErrorCode.DUPLICATE_LABEL,
+            error(ModelErrorCode.DUPLICATE_LABEL,
                 "`$" + name + "` is already bound in this scope", position);
             return;
         }
@@ -1381,7 +1382,7 @@ public final class SemanticValidator {
      */
     private void checkMultiplicity(Verb verb, Step step, SourcePosition position) {
         if (step.multiplicity() != null && !verb.allowsMultiplicity()) {
-            error(ErrorCode.MULTIPLICITY_NOT_ALLOWED,
+            error(ModelErrorCode.MULTIPLICITY_NOT_ALLOWED,
                 "`" + verb.keyword() + "` operates on exactly one component", position);
         }
     }

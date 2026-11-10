@@ -14,7 +14,7 @@ import fr.cnrs.lacito.liftapi.model.LiftFieldAndTraitDefinition;
 import fr.cnrs.lacito.liftapi.model.LiftHeader;
 import fr.cnrs.lacito.liftapi.model.LiftTrait;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -103,7 +103,7 @@ class ConstructsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses an upsert in the scope of a create")
         void refusesAnUpsertInACreationBlock() {
-            refused(ErrorCode.CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK,
+            refused(ModelErrorCode.CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK,
                 """
                 create entry(form@tww = "mimi") {
                   upsert sense(gloss@en = "lizard")
@@ -114,7 +114,7 @@ class ConstructsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a create entry in a block body, an entry having no parent")
         void refusesACreateEntryInABlockBody() {
-            refused(ErrorCode.ILLEGAL_PARENT,
+            refused(ModelErrorCode.ILLEGAL_PARENT,
                 """
                 entry[form@tww = "memi"] {
                   create entry(form@tww = "mimi")
@@ -161,14 +161,14 @@ class ConstructsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses an unbound label")
         void refusesAnUnboundLabel() {
-            refused(ErrorCode.UNKNOWN_LABEL,
+            refused(ModelErrorCode.UNKNOWN_LABEL,
                 "create sense(gloss@en = \"puppy\") under $nowhere");
         }
 
         @Test
         @DisplayName("refuses re-binding a visible name")
         void refusesADuplicateLabel() {
-            refused(ErrorCode.DUPLICATE_LABEL,
+            refused(ModelErrorCode.DUPLICATE_LABEL,
                 """
                 ensure entry[form@tww = "memi"] as $e
                 ensure entry[form@tww = "memi"] as $e
@@ -235,13 +235,13 @@ class ConstructsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a language the dictionary already has")
         void refusesAnExistingLanguage() {
-            refused(ErrorCode.LANGUAGE_ALREADY_EXISTS, "language-create object = \"tww\"");
+            refused(ModelErrorCode.LANGUAGE_ALREADY_EXISTS, "language-create object = \"tww\"");
         }
 
         @Test
         @DisplayName("refuses a default that names a language the dictionary does not have")
         void refusesAnUnknownDefault() {
-            refused(ErrorCode.NO_SUCH_META_LANGUAGE, "language-default meta = \"de\"");
+            refused(ModelErrorCode.NO_SUCH_META_LANGUAGE, "language-default meta = \"de\"");
         }
     }
 
@@ -269,7 +269,7 @@ class ConstructsTest extends PatchTestSupport {
         @Test
         @DisplayName("a failing second command undoes the first")
         void aFailingCommandUndoesTheFirst() {
-            refused(ErrorCode.AMBIGUOUS_REFERENCE,
+            refused(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 """
                 create sense(gloss@en = "puppy") under entry[form@tww = "memi"]
                 create sense(gloss@en = "piglet") under entry[form@tww = "mami"]
@@ -280,7 +280,7 @@ class ConstructsTest extends PatchTestSupport {
         @Test
         @DisplayName("a language created by a failing script is not created")
         void aLanguageIsRolledBackToo() {
-            refused(ErrorCode.AMBIGUOUS_REFERENCE,
+            refused(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 """
                 language-create object = "hui"
                 create entry(form@hui = "mami")
@@ -292,7 +292,7 @@ class ConstructsTest extends PatchTestSupport {
         @Test
         @DisplayName("a script with a static error changes nothing at all")
         void aStaticErrorChangesNothing() {
-            refused(ErrorCode.MISSING_PARENT_CLAUSE,
+            refused(ModelErrorCode.MISSING_PARENT_CLAUSE,
                 """
                 create sense(gloss@en = "puppy") under entry[form@tww = "memi"]
                 create sense(gloss@en = "piglet")
@@ -303,7 +303,7 @@ class ConstructsTest extends PatchTestSupport {
         @Test
         @DisplayName("a failing command inside a block rolls the block back")
         void aBlockRollsBack() {
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 """
                 entry[form@tww = "memi"] {
                   create sense(gloss@en = "puppy")
@@ -323,7 +323,7 @@ class ConstructsTest extends PatchTestSupport {
                   create annotation(type = "review", value = "c")
                 }
                 """);
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 """
                 delete annotation#1 under entry[form@tww = "memi"]
                 create sense(gloss@en = "dog") under entry[form@tww = "memi"]
@@ -343,7 +343,7 @@ class ConstructsTest extends PatchTestSupport {
                   create relation(type = "antonym", target = entry[form@tww = "memi"])
                 }
                 """);
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 """
                 delete relation#1
                   under variant[form@tww = "mamii"]
@@ -395,32 +395,32 @@ class ConstructsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuse to delete a language in use, bound in scope, or the last of its kind")
         void refuseToDeleteALanguage() {
-            refused(ErrorCode.LANGUAGE_IN_USE, "language-delete object = \"tpi\"");
-            refused(ErrorCode.LANGUAGE_IN_USE, """
+            refused(ModelErrorCode.LANGUAGE_IN_USE, "language-delete object = \"tpi\"");
+            refused(ModelErrorCode.LANGUAGE_IN_USE, """
                 language-create object = "hui"
                 language-delete object = "hui"
                 """);
-            refused(ErrorCode.NO_SUCH_OBJECT_LANGUAGE, "language-delete object = \"xyz\"");
+            refused(ModelErrorCode.NO_SUCH_OBJECT_LANGUAGE, "language-delete object = \"xyz\"");
             dictionary = LiftDictionary.makeBuilder()
                 .withMetaLanguages("en").withObjectLanguages("tww").build();
-            refused(ErrorCode.CANNOT_DELETE_LAST_LANGUAGE, "language-delete meta = \"en\"");
+            refused(ModelErrorCode.CANNOT_DELETE_LAST_LANGUAGE, "language-delete meta = \"en\"");
         }
 
         @Test
         @DisplayName("refuse what the header does not allow, each with its code")
         void refuseEachCondition() {
-            refused(ErrorCode.NO_SUCH_DECLARATION, "feature-create \"x\" in \"nothing\"");
-            refused(ErrorCode.NO_SUCH_DECLARATION, "feature-delete \"x\" in \"grammatical-info\"");
-            refused(ErrorCode.DECLARATION_ALREADY_EXISTS, """
+            refused(ModelErrorCode.NO_SUCH_DECLARATION, "feature-create \"x\" in \"nothing\"");
+            refused(ModelErrorCode.NO_SUCH_DECLARATION, "feature-delete \"x\" in \"grammatical-info\"");
+            refused(ModelErrorCode.DECLARATION_ALREADY_EXISTS, """
                 feature-create "Noun" in "grammatical-info"
                 feature-create "Noun" in "grammatical-info"
                 """);
-            refused(ErrorCode.DECLARATION_ALREADY_EXISTS, "feature-set-create \"note-type\"");
-            refused(ErrorCode.DECLARATION_IS_BUILT_IN,
+            refused(ModelErrorCode.DECLARATION_ALREADY_EXISTS, "feature-set-create \"note-type\"");
+            refused(ModelErrorCode.DECLARATION_IS_BUILT_IN,
                 "feature-set-rename \"grammatical-info\" to \"pos\"");
-            refused(ErrorCode.DECLARATION_IS_BUILT_IN, "feature-set-delete \"note-type\"");
-            refused(ErrorCode.DECLARATION_IN_USE, "feature-delete \"Noun\" in \"grammatical-info\"");
-            refused(ErrorCode.SYNTAX_ERROR, "feature-create \"\" in \"grammatical-info\"");
+            refused(ModelErrorCode.DECLARATION_IS_BUILT_IN, "feature-set-delete \"note-type\"");
+            refused(ModelErrorCode.DECLARATION_IN_USE, "feature-delete \"Noun\" in \"grammatical-info\"");
+            refused(ModelErrorCode.SYNTAX_ERROR, "feature-create \"\" in \"grammatical-info\"");
         }
 
         @Test
@@ -430,7 +430,7 @@ class ConstructsTest extends PatchTestSupport {
             header().declareFeature(noun);
             header().getGrammaticalInfoManager().addFeature("Adverb");
             Feature adverb = header().getGrammaticalInfoManager().getFeature("Adverb");
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE, """
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE, """
                 feature-set-create "variant-type"
                 feature-delete "Adverb" in "grammatical-info"
                 feature-rename "Noun" in "grammatical-info" to "N"
@@ -517,7 +517,7 @@ class ConstructsTest extends PatchTestSupport {
         @DisplayName("a set from an external ranges file cannot be renamed")
         void anExternalSetCannotBeRenamed() throws Exception {
             loadWithAnExternalRange();
-            refused(ErrorCode.DECLARATION_IS_EXTERNAL,
+            refused(ModelErrorCode.DECLARATION_IS_EXTERNAL,
                 "feature-set-rename \"dialects\" to \"regions\"");
             assertTrue(header().hasFeatureSet("dialects"));
         }
@@ -526,10 +526,10 @@ class ConstructsTest extends PatchTestSupport {
         @DisplayName("the features of a set from an external ranges file cannot be changed")
         void theFeaturesOfAnExternalSetCannotBeChanged() throws Exception {
             loadWithAnExternalRange();
-            refused(ErrorCode.DECLARATION_IS_EXTERNAL, "feature-create \"east\" in \"dialects\"");
-            refused(ErrorCode.DECLARATION_IS_EXTERNAL,
+            refused(ModelErrorCode.DECLARATION_IS_EXTERNAL, "feature-create \"east\" in \"dialects\"");
+            refused(ModelErrorCode.DECLARATION_IS_EXTERNAL,
                 "feature-rename \"south\" in \"dialects\" to \"deep south\"");
-            refused(ErrorCode.DECLARATION_IS_EXTERNAL, "feature-delete \"south\" in \"dialects\"");
+            refused(ModelErrorCode.DECLARATION_IS_EXTERNAL, "feature-delete \"south\" in \"dialects\"");
             assertEquals(Set.of("north", "south"),
                 header().getFeatureSet("dialects").getFeatures().keySet());
         }
@@ -540,7 +540,7 @@ class ConstructsTest extends PatchTestSupport {
             loadWithAnExternalRange();
             apply("create trait(type = \"dialects\", value = \"south\") under sense[gloss@en = \"pig\"] "
                 + "of entry[form@tww = \"mami\"]");
-            refused(ErrorCode.DECLARATION_IS_EXTERNAL,
+            refused(ModelErrorCode.DECLARATION_IS_EXTERNAL,
                 "create trait(type = \"dialects\", value = \"east\") under sense[gloss@en = \"pig\"] "
                     + "of entry[form@tww = \"mami\"]");
             assertFalse(header().getFeatureSet("dialects").hasFeature("east"));
@@ -579,7 +579,7 @@ class ConstructsTest extends PatchTestSupport {
             FeatureSet pos = header().getGrammaticalInfoManager();
             FeatureSet noteTypes = header().getNoteTypeManager();
             Feature noun = pos.getFeature("Noun");
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE, """
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE, """
                 feature-rename "Noun" in "grammatical-info" to "N"
                 create note(type = "draft", text@en = "to check") under entry[form@tww = "memi"]
                 create trait(type = "cv-pattern", value = "CVCV") under entry[form@tww = "memi"]
@@ -617,8 +617,8 @@ class ConstructsTest extends PatchTestSupport {
             Feature noun = header().getGrammaticalInfoManager().getFeature("Noun");
             header().declareFeature(noun);
             noun.addTrait(new LiftTrait(register, archaic));
-            refused(ErrorCode.DECLARATION_IN_USE, "feature-delete \"archaic\" in \"usage\"");
-            refused(ErrorCode.DECLARATION_IN_USE, "trait-delete \"register\"");
+            refused(ModelErrorCode.DECLARATION_IN_USE, "feature-delete \"archaic\" in \"usage\"");
+            refused(ModelErrorCode.DECLARATION_IN_USE, "trait-delete \"register\"");
         }
 
         @Test
@@ -646,15 +646,15 @@ class ConstructsTest extends PatchTestSupport {
         void refuseDefinitions() {
             apply("create field(type = \"editorial\", text@en = \"to check\") "
                 + "under entry[form@tww = \"memi\"]");
-            refused(ErrorCode.DECLARATION_IN_USE, "field-delete \"editorial\"");
-            refused(ErrorCode.NO_SUCH_DECLARATION, "trait-delete \"editorial\"");
-            refused(ErrorCode.DECLARATION_ALREADY_EXISTS, "trait-create \"editorial\"");
-            refused(ErrorCode.NO_SUCH_DECLARATION,
+            refused(ModelErrorCode.DECLARATION_IN_USE, "field-delete \"editorial\"");
+            refused(ModelErrorCode.NO_SUCH_DECLARATION, "trait-delete \"editorial\"");
+            refused(ModelErrorCode.DECLARATION_ALREADY_EXISTS, "trait-create \"editorial\"");
+            refused(ModelErrorCode.NO_SUCH_DECLARATION,
                 "trait-create \"t\" model = option range = \"nothing\"");
-            refused(ErrorCode.ILLEGAL_DATA_MODEL, "trait-create \"t\" model = multitext");
-            refused(ErrorCode.ILLEGAL_DATA_MODEL, "field-create \"f\" model = colour");
-            refused(ErrorCode.ILLEGAL_RANGE, "trait-create \"t\" model = option-sequence");
-            refused(ErrorCode.ILLEGAL_RANGE, "field-create \"f\" range = \"note-type\"");
+            refused(ModelErrorCode.ILLEGAL_DATA_MODEL, "trait-create \"t\" model = multitext");
+            refused(ModelErrorCode.ILLEGAL_DATA_MODEL, "field-create \"f\" model = colour");
+            refused(ModelErrorCode.ILLEGAL_RANGE, "trait-create \"t\" model = option-sequence");
+            refused(ModelErrorCode.ILLEGAL_RANGE, "field-create \"f\" range = \"note-type\"");
         }
     }
 
@@ -678,7 +678,7 @@ class ConstructsTest extends PatchTestSupport {
                 create sense(gloss@en = "piglet") under entry[form@tww = "mami"]
                 """);
             assertFalse(plan.isOk());
-            assertEquals(ErrorCode.AMBIGUOUS_REFERENCE, plan.error().code());
+            assertEquals(ModelErrorCode.AMBIGUOUS_REFERENCE, plan.error().code());
             assertEquals(1, entry("tww", "memi").getSenses().size());
         }
 
@@ -720,7 +720,7 @@ class ConstructsTest extends PatchTestSupport {
                 fr.cnrs.lacito.liftpatchbox.ast.Syntax.CONCISE, "<test>");
             assertTrue(plan.isOk());
             assertEffects(plan);
-            assertEquals("NO_COMMAND_RECOGNIZED", plan.warnings().get(0).code().name());
+            assertEquals("NO_COMMAND_RECOGNIZED", plan.warnings().get(0).code().id());
         }
     }
 }

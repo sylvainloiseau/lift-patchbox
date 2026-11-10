@@ -7,6 +7,7 @@ import fr.cnrs.lacito.liftpatchbox.ast.Predicate;
 import fr.cnrs.lacito.liftpatchbox.ast.PropertyRef;
 import fr.cnrs.lacito.liftpatchbox.ast.Step;
 import fr.cnrs.lacito.liftpatchbox.ast.Value;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
@@ -94,7 +95,7 @@ public final class Resolver {
     public ComponentRef label(String name, SourcePosition position) {
         ComponentRef ref = labels.get(name);
         if (ref == null) {
-            throw error(ErrorCode.UNKNOWN_LABEL,
+            throw error(ModelErrorCode.UNKNOWN_LABEL,
                 "no visible command has bound `$" + name + "`", position);
         }
         return ref;
@@ -192,7 +193,7 @@ public final class Resolver {
             ? model.root()
             : blockComponent;
         if (parent == null) {
-            throw error(ErrorCode.INCOMPLETE_ANCESTOR_CHAIN,
+            throw error(ModelErrorCode.INCOMPLETE_ANCESTOR_CHAIN,
                 "the chain of ancestors must be continued up to the root", step.position());
         }
         return resolveStepUnder(parent, step);
@@ -203,16 +204,16 @@ public final class Resolver {
     ) {
         if (found.isEmpty() && !mayBeEmpty) {
             if (parentCount == 1 && step instanceof Step.Component c && c.ordinal() != null) {
-                throw error(ErrorCode.INDEX_OUT_OF_BOUNDS,
+                throw error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
                     "the ordinal " + c.ordinal() + " is greater than the number of same-type "
                         + "siblings under this parent",
                     step.position());
             }
-            throw error(ErrorCode.NOT_FOUND,
+            throw error(ModelErrorCode.NOT_FOUND,
                 "no component matches `" + step + "`", step.position());
         }
         if (unique && found.size() > 1) {
-            throw error(ErrorCode.AMBIGUOUS_REFERENCE,
+            throw error(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 found.size() + " components match `" + step
                     + "`, and this selector must designate exactly one",
                 step.position());
@@ -389,7 +390,7 @@ public final class Resolver {
         ComponentTypeDef def = metamodel.requireComponentType(ref.componentType());
         Optional<PropertyDef> p = def.property(property.name());
         if (p.isEmpty()) {
-            throw error(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+            throw error(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                 "the metamodel defines no property `" + property.name() + "` on a `"
                     + def.name() + "`",
                 position);
@@ -447,17 +448,17 @@ public final class Resolver {
             ComponentRef target = switch (value) {
                 case Value.ChainRef chain -> resolveOne(chain.chain(), null);
                 case Value.LabelRef label -> label(label.name(), position);
-                default -> throw error(ErrorCode.REFERENCE_VALUE_MUST_BE_A_CHAIN,
+                default -> throw error(ModelErrorCode.REFERENCE_VALUE_MUST_BE_A_CHAIN,
                     "a reference is written as a chain or as a label, never as a bare string",
                     position);
             };
-            return model.idOf(target).orElseThrow(() -> error(ErrorCode.NOT_FOUND,
+            return model.idOf(target).orElseThrow(() -> error(ModelErrorCode.NOT_FOUND,
                 "the component designated as a reference target carries no identifier", position));
         }
         return switch (value) {
             case Value.Str s -> s.text();
             case Value.Num n -> Long.toString(n.value());
-            default -> throw error(ErrorCode.SYNTAX_ERROR,
+            default -> throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + property.datatype().jsonName() + "` property takes a literal value",
                 position);
         };

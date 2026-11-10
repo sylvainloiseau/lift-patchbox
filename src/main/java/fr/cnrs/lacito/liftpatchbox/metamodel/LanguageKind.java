@@ -1,5 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.metamodel;
 
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 
 /**
@@ -13,10 +14,10 @@ import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 public enum LanguageKind {
 
     /** A language the dictionary describes, such as the one of {@code entry.form}. */
-    OBJECT(ErrorCode.NO_SUCH_OBJECT_LANGUAGE),
+    OBJECT(ModelErrorCode.NO_SUCH_OBJECT_LANGUAGE),
 
     /** A language the dictionary describes <em>in</em>, such as the one of {@code sense.gloss}. */
-    META(ErrorCode.NO_SUCH_META_LANGUAGE);
+    META(ModelErrorCode.NO_SUCH_META_LANGUAGE);
 
     private final ErrorCode noSuchLanguage;
 

@@ -5,7 +5,8 @@ import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
+import fr.cnrs.lacito.liftpatchbox.parser.SyntaxErrorCode;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.DisplayName;
 import org.junit.jupiter.api.Nested;
@@ -78,7 +79,7 @@ class ConciseSyntaxTest extends PatchTestSupport {
         void aBackslashEscapesALine() {
             Plan plan = applyConcise("\\c /memi/puppy\n");
             assertEffects(plan);
-            assertEquals("NO_COMMAND_RECOGNIZED", plan.warnings().get(0).code().name());
+            assertEquals("NO_COMMAND_RECOGNIZED", plan.warnings().get(0).code().id());
         }
 
         @Test
@@ -104,7 +105,7 @@ class ConciseSyntaxTest extends PatchTestSupport {
         @Test
         @DisplayName("a line that matches the rule but does not parse is an error, never prose")
         void aMistypedCommandIsAnError() {
-            refusedConcise(ErrorCode.SYNTAX_ERROR, "c /e[f=\"memi\" s(g=\"puppy\")\n");
+            refusedConcise(ModelErrorCode.SYNTAX_ERROR, "c /e[f=\"memi\" s(g=\"puppy\")\n");
         }
     }
 
@@ -122,7 +123,7 @@ class ConciseSyntaxTest extends PatchTestSupport {
         @Test
         @DisplayName("the link between the path and the target is strict")
         void theLinkToTheTargetIsStrict() {
-            refusedConcise(ErrorCode.AMBIGUOUS_REFERENCE, "d /e[f=\"mami\"] s[g=\"taro\"]");
+            refusedConcise(ModelErrorCode.AMBIGUOUS_REFERENCE, "d /e[f=\"mami\"] s[g=\"taro\"]");
         }
 
         @Test
@@ -135,13 +136,13 @@ class ConciseSyntaxTest extends PatchTestSupport {
         @Test
         @DisplayName("an existential path over two homophones is ambiguous")
         void anExistentialPathOverHomophonesIsAmbiguous() {
-            refusedConcise(ErrorCode.AMBIGUOUS_REFERENCE, "d /mami/pig x#1");
+            refusedConcise(ModelErrorCode.AMBIGUOUS_REFERENCE, "d /mami/pig x#1");
         }
 
         @Test
         @DisplayName("the direct target of a delete is exactly one step")
         void theTargetIsOneStep() {
-            refusedConcise(ErrorCode.TARGET_MUST_BE_A_SINGLE_STEP, "d /mami/pig");
+            refusedConcise(SyntaxErrorCode.TARGET_MUST_BE_A_SINGLE_STEP, "d /mami/pig");
         }
 
         @Test
@@ -181,21 +182,21 @@ class ConciseSyntaxTest extends PatchTestSupport {
         @Test
         @DisplayName("there is no abbreviation below the third depth")
         void thereIsNoAbbreviationBelowTheThird() {
-            refusedConcise(ErrorCode.ABBREVIATED_STEP_NOT_ALLOWED_HERE,
+            refusedConcise(SyntaxErrorCode.ABBREVIATED_STEP_NOT_ALLOWED_HERE,
                 "d /mami/pig/\"a mami jefi\" foo");
         }
 
         @Test
         @DisplayName("a quoted token is always an abbreviated step")
         void aQuotedTokenIsAlwaysAbbreviated() {
-            refusedConcise(ErrorCode.NOT_FOUND,
+            refusedConcise(ModelErrorCode.NOT_FOUND,
                 "d /e[f=\"mami\", hn=1]!s[g=\"pig\"] \"c\"");
         }
 
         @Test
         @DisplayName("a bare singleton name is never an abbreviated step")
         void aBareSingletonNameIsASingletonStep() {
-            refusedConcise(ErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
+            refusedConcise(ModelErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
                 "d /e[f=\"mami\", hn=1]!s[g=\"pig\"] c");
         }
 
@@ -222,14 +223,14 @@ class ConciseSyntaxTest extends PatchTestSupport {
         @Test
         @DisplayName("are refused beyond the number the component type allows")
         void areRefusedBeyondTheDeclaredNumber() {
-            refusedConcise(ErrorCode.UNNAMED_ARGUMENT_NOT_ALLOWED,
+            refusedConcise(SyntaxErrorCode.UNNAMED_ARGUMENT_NOT_ALLOWED,
                 "c /e[f=\"memi\"] s(\"puppy\", \"extra\")");
         }
 
         @Test
         @DisplayName("are refused on a component type that declares none")
         void areRefusedOnATypeWithNone() {
-            refusedConcise(ErrorCode.UNNAMED_ARGUMENT_NOT_ALLOWED,
+            refusedConcise(SyntaxErrorCode.UNNAMED_ARGUMENT_NOT_ALLOWED,
                 "c /e[f=\"memi\"] r(\"synonym\")");
         }
     }
@@ -281,7 +282,7 @@ class ConciseSyntaxTest extends PatchTestSupport {
         @Test
         @DisplayName("refuse a delete as an anchor, its component being gone")
         void refuseADeleteAsAnAnchor() {
-            refusedConcise(ErrorCode.DELETE_CANNOT_BE_AN_ANCHOR,
+            refusedConcise(ModelErrorCode.DELETE_CANNOT_BE_AN_ANCHOR,
                 """
                 d /memi
                   c s("puppy")
@@ -291,7 +292,7 @@ class ConciseSyntaxTest extends PatchTestSupport {
         @Test
         @DisplayName("refuse a tab in the indentation")
         void refuseATabInTheIndentation() {
-            refusedConcise(ErrorCode.SYNTAX_ERROR, "c e(\"mimi\")\n\tc s(\"lizard\")\n");
+            refusedConcise(ModelErrorCode.SYNTAX_ERROR, "c e(\"mimi\")\n\tc s(\"lizard\")\n");
         }
     }
 
@@ -334,13 +335,13 @@ class ConciseSyntaxTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a path whose steps are not abbreviated")
         void refusesANonAbbreviatedPath() {
-            refusedConcise(ErrorCode.CONSTRUCTOR_REQUIRED, "p /e[f=\"mami\"]/s[g=\"pig\"]");
+            refusedConcise(SyntaxErrorCode.CONSTRUCTOR_REQUIRED, "p /e[f=\"mami\"]/s[g=\"pig\"]");
         }
 
         @Test
         @DisplayName("refuses a single step, which upserts an entry with no disambiguation")
         void refusesASingleStep() {
-            refusedConcise(ErrorCode.UPSERT_ENTRY_WITHOUT_DISAMBIGUATION, "p /mami");
+            refusedConcise(ModelErrorCode.UPSERT_ENTRY_WITHOUT_DISAMBIGUATION, "p /mami");
         }
     }
 

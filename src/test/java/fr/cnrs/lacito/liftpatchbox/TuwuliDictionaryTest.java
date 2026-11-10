@@ -14,7 +14,7 @@ import fr.cnrs.lacito.liftapi.model.LiftSense;
 import fr.cnrs.lacito.liftapi.model.LiftVariant;
 import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import java.io.File;
 import java.nio.file.Files;
@@ -140,7 +140,7 @@ class TuwuliDictionaryTest {
             Plan plan = box().plan(shared, "language-delete object = \"tww\"",
                 Syntax.REFERENCE, "<tww>");
             assertFalse(plan.isOk());
-            assertEquals(ErrorCode.LANGUAGE_IN_USE, plan.error().code());
+            assertEquals(ModelErrorCode.LANGUAGE_IN_USE, plan.error().code());
             assertTrue(shared.getObjectLanguageManager().hasLanguage("tww"));
         }
 
@@ -171,7 +171,7 @@ class TuwuliDictionaryTest {
                 "set value = \"Noun\" on category of sense[gloss@en = \"pig\"]",
                 Syntax.REFERENCE, "<tww>");
             assertFalse(plan.isOk());
-            assertEquals(ErrorCode.INCOMPLETE_ANCESTOR_CHAIN, plan.error().code());
+            assertEquals(ModelErrorCode.INCOMPLETE_ANCESTOR_CHAIN, plan.error().code());
         }
     }
 

@@ -4,6 +4,7 @@ import static org.junit.jupiter.api.Assertions.assertFalse;
 import static org.junit.jupiter.api.Assertions.assertTrue;
 
 import fr.cnrs.lacito.liftpatchbox.ast.Script;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCollector;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
@@ -45,15 +46,15 @@ class SpecificationExamplesTest {
      */
     private static final Map<String, ErrorCode> DELIBERATELY_ILLEGAL = Map.of(
         // 5.2: a sense selected on the strict axis by two qualified glosses.
-        "gloss@en = \"pig\", gloss@fr = \"porc\"", ErrorCode.DUPLICATE_SELECTOR,
+        "gloss@en = \"pig\", gloss@fr = \"porc\"", ModelErrorCode.DUPLICATE_SELECTOR,
         // 5.3.2.2: an ambiguous entry that the child selector must not disambiguate.
         "create example(\n  text@tww = \"a mami jefi\"\n)\nunder sense[\n  gloss@en = \"pig\"\n]\nof entry[\n  form@tww = \"mami\"\n]",
-        ErrorCode.AMBIGUOUS_REFERENCE,
+        ModelErrorCode.AMBIGUOUS_REFERENCE,
         // 7.3.1: a unique selector carrying a predicate beyond its strategy.
         "definition@en = \"A four-legged terrestrial animal\"]", 
-        ErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
+        ModelErrorCode.PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR,
         // Part 3, 5.6: the block's last line, annotated with the code it raises.
-        "(d)       # MISSING_LANGUAGE_QUALIFIER", ErrorCode.MISSING_LANGUAGE_QUALIFIER
+        "(d)       # MISSING_LANGUAGE_QUALIFIER", ModelErrorCode.MISSING_LANGUAGE_QUALIFIER
     );
 
     /**

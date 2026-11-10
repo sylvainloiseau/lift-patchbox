@@ -1,6 +1,7 @@
 package fr.cnrs.lacito.liftpatchbox.parser;
 
 import fr.cnrs.lacito.liftpatchbox.ast.Verb;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
@@ -396,6 +397,6 @@ public final class ShortLinePreprocessor {
 
     private LiftPatchException syntaxError(String message, SourcePosition position) {
         return new LiftPatchException(
-            LiftPatchError.of(ErrorCode.SYNTAX_ERROR, message + " (in " + source + ")", position));
+            LiftPatchError.of(ModelErrorCode.SYNTAX_ERROR, message + " (in " + source + ")", position));
     }
 }

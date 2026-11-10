@@ -9,7 +9,7 @@ import fr.cnrs.lacito.liftapi.model.LiftFieldAndTraitDefinition;
 import fr.cnrs.lacito.liftapi.model.LiftSense;
 import fr.cnrs.lacito.liftapi.model.LiftTrait;
 import fr.cnrs.lacito.liftapi.model.LiftVariant;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import java.util.List;
 import java.util.Optional;
 import org.junit.jupiter.api.BeforeEach;
@@ -50,7 +50,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a duplicate identity key among same-type siblings")
         void refusesADuplicateIdentityKey() {
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 "create sense(gloss@en = \"dog\") under entry[form@tww = \"memi\"]");
         }
 
@@ -99,7 +99,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a singleton, which comes into existence with its host")
         void refusesASingleton() {
-            refused(ErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
+            refused(ModelErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
                 "create category(value = \"Noun\") under sense[gloss@en = \"dog\"] "
                     + "of entry[form@tww = \"memi\"]");
         }
@@ -107,7 +107,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses an at clause on a typed component, which has no position")
         void refusesAnAtClauseOnATypedComponent() {
-            refused(ErrorCode.COMPONENT_NOT_ORDERED,
+            refused(ModelErrorCode.COMPONENT_NOT_ORDERED,
                 "create note(type = \"general\", text@en = \"x\") "
                     + "under entry[form@tww = \"memi\"] at beginning");
         }
@@ -124,7 +124,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a reversal on an entry, which holds none")
         void refusesAReversalOnAnEntry() {
-            refused(ErrorCode.ILLEGAL_PARENT,
+            refused(ModelErrorCode.ILLEGAL_PARENT,
                 "create reversal(type = \"reversal\", form@tww = \"mami\") "
                     + "under entry[form@tww = \"memi\"]");
         }
@@ -134,7 +134,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         void refusesADuplicateReversal() {
             apply("create reversal(type = \"reversal\", form@tww = \"mami\") "
                 + "under sense[gloss@en = \"dog\"] of entry[form@tww = \"memi\"]");
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 "create reversal(type = \"reversal\", form@tww = \"mami\") "
                     + "under sense[gloss@en = \"dog\"] of entry[form@tww = \"memi\"]");
         }
@@ -154,7 +154,7 @@ class ComponentCommandsTest extends PatchTestSupport {
             // The example already carries a `free` translation, and the dictionary
             // model refuses the duplicate key as it adds it; the language reports
             // that with its own code.
-            refusedConcise(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refusedConcise(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 "c /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"] "
                     + "o(\"free\", \"another one\")");
         }
@@ -164,7 +164,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         void refusesADuplicateNote() {
             apply("create note(type = \"general\", text@en = \"first\") "
                 + "under entry[form@tww = \"memi\"]");
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 "create note(type = \"general\", text@en = \"second\") "
                     + "under entry[form@tww = \"memi\"]");
         }
@@ -172,7 +172,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a missing required property")
         void refusesAMissingRequiredProperty() {
-            refused(ErrorCode.MISSING_REQUIRED_PROPERTY,
+            refused(ModelErrorCode.MISSING_REQUIRED_PROPERTY,
                 "create note(type = \"general\") under entry[form@tww = \"memi\"]");
         }
 
@@ -229,7 +229,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a type on a variant, which has none")
         void refusesATypeOnAVariant() {
-            refused(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+            refused(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                 "create variant(type = \"dialectal\", form@tww = \"mamii\") "
                     + "under entry[form@tww = \"mami\", hn = 1]");
         }
@@ -237,7 +237,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a target on a variant, whose links are relations")
         void refusesATargetOnAVariant() {
-            refused(ErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+            refused(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                 "create variant(target = entry[form@tww = \"memi\"]) "
                     + "under entry[form@tww = \"mami\", hn = 1]");
         }
@@ -245,7 +245,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a variant without a form")
         void refusesAVariantWithoutAForm() {
-            refused(ErrorCode.MISSING_REQUIRED_PROPERTY,
+            refused(ModelErrorCode.MISSING_REQUIRED_PROPERTY,
                 "create variant() under entry[form@tww = \"mami\", hn = 1]");
         }
 
@@ -254,7 +254,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         void refusesTwoVariantsWithTheSameForm() {
             apply("create variant(form@tww = \"mamii\") "
                 + "under entry[form@tww = \"mami\", hn = 1]");
-            refused(ErrorCode.CANNOT_CREATE_DUPLICATE,
+            refused(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
                 "create variant(form@tww = \"mamii\") "
                     + "under entry[form@tww = \"mami\", hn = 1]");
         }
@@ -315,7 +315,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses an entry with nothing to tell the homophones apart")
         void refusesAnEntryWithoutDisambiguation() {
-            refused(ErrorCode.UPSERT_ENTRY_WITHOUT_DISAMBIGUATION,
+            refused(ModelErrorCode.UPSERT_ENTRY_WITHOUT_DISAMBIGUATION,
                 "upsert entry(form@tww = \"mami\")");
         }
 
@@ -337,14 +337,14 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses an initializer list that does not cover the natural identity")
         void refusesAnIncompleteIdentity() {
-            refused(ErrorCode.MISSING_IDENTITY_PROPERTY,
+            refused(ModelErrorCode.MISSING_IDENTITY_PROPERTY,
                 "upsert relation(type = \"synonym\") under entry[form@tww = \"memi\"]");
         }
 
         @Test
         @DisplayName("refuses an id, which a component that does not exist yet has none of")
         void refusesAnId() {
-            refused(ErrorCode.ID_NOT_ALLOWED_ON_UPSERT,
+            refused(ModelErrorCode.ID_NOT_ALLOWED_ON_UPSERT,
                 "upsert sense(gloss@en = \"taro\", id = \"s-3\") "
                     + "under entry[form@tww = \"mami\", hn = 2]");
         }
@@ -364,7 +364,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("fails when the component is absent")
         void failsWhenTheComponentIsAbsent() {
-            refused(ErrorCode.NOT_FOUND,
+            refused(ModelErrorCode.NOT_FOUND,
                 "ensure sense[gloss@en = \"yam\"] under entry[form@tww = \"mami\", hn = 2]");
         }
 
@@ -378,7 +378,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses parentheses, which create")
         void refusesParentheses() {
-            refused(ErrorCode.SYNTAX_ERROR,
+            refused(ModelErrorCode.SYNTAX_ERROR,
                 "ensure sense(gloss@en = \"taro\") under entry[form@tww = \"mami\", hn = 2]");
         }
     }
@@ -425,7 +425,7 @@ class ComponentCommandsTest extends PatchTestSupport {
                 """);
             assertEffects(plan);
             assertEquals(1, plan.warnings().size());
-            assertEquals("COMMAND_APPLIES_TO_NO_COMPONENT", plan.warnings().get(0).code().name());
+            assertEquals("COMMAND_APPLIES_TO_NO_COMPONENT", plan.warnings().get(0).code().id());
         }
 
         @Test
@@ -434,14 +434,14 @@ class ComponentCommandsTest extends PatchTestSupport {
             assertEffects(
                 applyConcise("d /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"] o^free"),
                 "deleted:translation@null");
-            refusedConcise(ErrorCode.NOT_FOUND,
+            refusedConcise(ModelErrorCode.NOT_FOUND,
                 "e /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"] o^free");
         }
 
         @Test
         @DisplayName("refuses a singleton, which disappears only with its host")
         void refusesASingleton() {
-            refused(ErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
+            refused(ModelErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
                 "delete category under sense[gloss@en = \"pig\"] "
                     + "of entry[form@tww = \"mami\", hn = 1]");
         }
@@ -495,7 +495,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses the position the component already occupies")
         void refusesTheCurrentPosition() {
-            refused(ErrorCode.MOVING_TO_CURRENT_POSITION,
+            refused(ModelErrorCode.MOVING_TO_CURRENT_POSITION,
                 """
                 move example#1
                   under sense[gloss@en = "pig"]
@@ -507,7 +507,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses to make a component its own ancestor")
         void refusesSelfAncestry() {
-            refused(ErrorCode.SELF_ANCESTOR,
+            refused(ModelErrorCode.SELF_ANCESTOR,
                 """
                 move sense[gloss@en = "pig"]
                   under entry[form@tww = "mami", hn = 1]
@@ -519,7 +519,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses a typed component, which has no position to change")
         void refusesATypedComponent() {
-            refused(ErrorCode.COMPONENT_NOT_ORDERED,
+            refused(ModelErrorCode.COMPONENT_NOT_ORDERED,
                 """
                 move translation[type = "free"]
                   under example#1 of sense[gloss@en = "pig"] of entry[form@tww = "mami", hn = 1]
@@ -530,7 +530,7 @@ class ComponentCommandsTest extends PatchTestSupport {
         @Test
         @DisplayName("refuses to appear in a block body")
         void refusesToAppearInABlockBody() {
-            refused(ErrorCode.MOVE_NOT_ALLOWED_IN_BLOCK,
+            refused(ModelErrorCode.MOVE_NOT_ALLOWED_IN_BLOCK,
                 """
                 sense[gloss@en = "pig"] of entry[form@tww = "mami", hn = 1] {
                   move example#1 at end

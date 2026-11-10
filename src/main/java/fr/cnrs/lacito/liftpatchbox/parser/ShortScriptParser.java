@@ -23,6 +23,7 @@ import fr.cnrs.lacito.liftpatchbox.ast.Step;
 import fr.cnrs.lacito.liftpatchbox.ast.Syntax;
 import fr.cnrs.lacito.liftpatchbox.ast.Value;
 import fr.cnrs.lacito.liftpatchbox.ast.Verb;
+import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
@@ -153,7 +154,7 @@ public final class ShortScriptParser {
                     stack.remove(stack.size() - 1);
                 }
                 if (!stack.isEmpty() && line.indent() != stack.get(stack.size() - 1).bodyIndent) {
-                    throw error(ErrorCode.SYNTAX_ERROR,
+                    throw error(ModelErrorCode.SYNTAX_ERROR,
                         "this indentation matches no open block level", line.position(),
                         operationCounter + 1);
                 }
@@ -270,7 +271,7 @@ public final class ShortScriptParser {
     private Pragma parsePragma(ShortLinePreprocessor.Recognized line) {
         Matcher m = PRAGMA.matcher(line.body().strip());
         if (!m.matches()) {
-            throw error(ErrorCode.SYNTAX_ERROR, "malformed version pragma", line.position(), 0);
+            throw error(ModelErrorCode.SYNTAX_ERROR, "malformed version pragma", line.position(), 0);
         }
         Map<String, String> attributes = new LinkedHashMap<>();
         Matcher a = PRAGMA_ATTRIBUTE.matcher(m.group(2));
@@ -309,7 +310,7 @@ public final class ShortScriptParser {
         List<TopLevelSplitter.Token> tokens =
             TopLevelSplitter.split(line.body(), line.bodyColumn());
         if (tokens.isEmpty()) {
-            throw error(ErrorCode.SYNTAX_ERROR, "a command needs an argument", line.position(),
+            throw error(ModelErrorCode.SYNTAX_ERROR, "a command needs an argument", line.position(),
                 operationCounter + 1);
         }
         int tailStart = tokens.size();
@@ -347,12 +348,12 @@ public final class ShortScriptParser {
             // that this check can report the code: a marker on the wrong verb is a
             // mistake about the language, and saying so is more useful than saying
             // the line does not parse (Part 3, section 2.1).
-            throw error(ErrorCode.MULTIPLICITY_NOT_ALLOWED,
+            throw error(ModelErrorCode.MULTIPLICITY_NOT_ALLOWED,
                 "`" + line.verb().keyword() + "` operates on exactly one component",
                 line.position(), operationCounter + 1);
         }
         if (main.isEmpty()) {
-            throw error(ErrorCode.SYNTAX_ERROR, "a `" + line.verb().code()
+            throw error(ModelErrorCode.SYNTAX_ERROR, "a `" + line.verb().code()
                 + "` command needs a path or a constructor", line.position(),
                 operationCounter + 1);
         }
@@ -361,7 +362,7 @@ public final class ShortScriptParser {
 
         if (!hasConstructor) {
             if (main.size() > 1) {
-                throw error(ErrorCode.SYNTAX_ERROR,
+                throw error(ModelErrorCode.SYNTAX_ERROR,
                     "a path-only `" + line.verb().code() + "` command takes one path",
                     position(line, last), operationCounter + 1);
             }
@@ -371,7 +372,7 @@ public final class ShortScriptParser {
         ParsedPath path = null;
         if (main.size() > 1) {
             if (main.size() > 2) {
-                throw error(ErrorCode.SYNTAX_ERROR,
+                throw error(ModelErrorCode.SYNTAX_ERROR,
                     "a `" + line.verb().code() + "` command takes one parent path",
                     position(line, main.get(0)), operationCounter + 1);
             }
@@ -403,7 +404,7 @@ public final class ShortScriptParser {
         ParsedPath path = parsePath(token, line, startDepthOf(token));
         if (line.verb() == Verb.CREATE) {
             if (!path.abbreviated.get(path.steps.size() - 1)) {
-                throw error(ErrorCode.CONSTRUCTOR_REQUIRED,
+                throw error(SyntaxErrorCode.CONSTRUCTOR_REQUIRED,
                     "a path-only `c` creates the component its last step denotes, and can do so "
                         + "only when that step is an abbreviated one; write the constructor",
                     position(line, token), operationCounter + 1);
@@ -419,7 +420,7 @@ public final class ShortScriptParser {
         // condition into the initializers of a component that has to be created.
         for (int i = 0; i < path.steps.size(); i++) {
             if (!path.abbreviated.get(i)) {
-                throw error(ErrorCode.CONSTRUCTOR_REQUIRED,
+                throw error(SyntaxErrorCode.CONSTRUCTOR_REQUIRED,
                     "every step of a path-only `p` is upserted, so every step must be an "
                         + "abbreviated one; write the constructor",
                     position(line, token), operationCounter + 1);
@@ -480,12 +481,12 @@ public final class ShortScriptParser {
         Multiplicity multiplicity
     ) {
         if (main.isEmpty()) {
-            throw error(ErrorCode.SYNTAX_ERROR,
+            throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command needs a target step",
                 line.position(), operationCounter + 1);
         }
         if (main.size() > 2) {
-            throw error(ErrorCode.SYNTAX_ERROR,
+            throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command takes a parent path and one target step",
                 position(line, main.get(0)), operationCounter + 1);
         }
@@ -496,13 +497,13 @@ public final class ShortScriptParser {
         ParsedPath targetPath = parsePath(targetToken, line,
             targetDepth(parentPath, targetToken), parentTypeOf(parentPath));
         if (targetPath.steps.size() != 1) {
-            throw error(ErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
+            throw error(SyntaxErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
                 "the direct target of a `" + line.verb().code()
                     + "` is exactly one step, written after the parent path",
                 position(line, targetToken), operationCounter + 1);
         }
         if (parentPath != null && targetPath.absolute) {
-            throw error(ErrorCode.SYNTAX_ERROR,
+            throw error(ModelErrorCode.SYNTAX_ERROR,
                 "the root marker `/` may be written on a target step only when no parent path "
                     + "precedes it",
                 position(line, targetToken), operationCounter + 1);
@@ -530,7 +531,7 @@ public final class ShortScriptParser {
         Multiplicity multiplicity
     ) {
         if (main.isEmpty()) {
-            throw error(ErrorCode.SYNTAX_ERROR, "a `m` command needs a source",
+            throw error(ModelErrorCode.SYNTAX_ERROR, "a `m` command needs a source",
                 line.position(), operationCounter + 1);
         }
         ParsedPath sourcePath = main.size() >= 2
@@ -540,7 +541,7 @@ public final class ShortScriptParser {
         ParsedPath targetPath = parsePath(targetToken, line,
             targetDepth(sourcePath, targetToken), parentTypeOf(sourcePath));
         if (targetPath.steps.size() != 1) {
-            throw error(ErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
+            throw error(SyntaxErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
                 "the source of a `m` is exactly one step, written after the parent path",
                 position(line, targetToken), operationCounter + 1);
         }
@@ -550,7 +551,7 @@ public final class ShortScriptParser {
         }
         if (sourcePath == null && target instanceof Step.Component c
             && Metamodel.ENTRY.equals(c.componentType())) {
-            throw error(ErrorCode.SYNTAX_ERROR,
+            throw error(ModelErrorCode.SYNTAX_ERROR,
                 "`m` cannot target an entry: the dictionary, not the script, orders the entry list",
                 position(line, targetToken), operationCounter + 1);
         }
@@ -574,18 +575,18 @@ public final class ShortScriptParser {
         Multiplicity multiplicity
     ) {
         if (main.isEmpty()) {
-            throw error(ErrorCode.SYNTAX_ERROR,
+            throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command needs a parenthesized property list",
                 line.position(), operationCounter + 1);
         }
         TopLevelSplitter.Token last = main.get(main.size() - 1);
         if (!last.text().startsWith("(")) {
-            throw error(ErrorCode.SYNTAX_ERROR,
+            throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command ends with a parenthesized property list",
                 position(line, last), operationCounter + 1);
         }
         if (main.size() > 3) {
-            throw error(ErrorCode.SYNTAX_ERROR,
+            throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command takes a path and at most one further step",
                 position(line, main.get(0)), operationCounter + 1);
         }
@@ -601,7 +602,7 @@ public final class ShortScriptParser {
                 ParsedPath stepPath = parsePath(stepToken, line,
                     targetDepth(path, stepToken), parentTypeOf(path));
                 if (stepPath.steps.size() != 1) {
-                    throw error(ErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
+                    throw error(SyntaxErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
                         "the component a property command writes on is one step",
                         position(line, stepToken), operationCounter + 1);
                 }
@@ -975,7 +976,7 @@ public final class ShortScriptParser {
         }
 
         if (depth < 1 || depth > ABBREVIATED_TYPES.length) {
-            throw error(ErrorCode.ABBREVIATED_STEP_NOT_ALLOWED_HERE,
+            throw error(SyntaxErrorCode.ABBREVIATED_STEP_NOT_ALLOWED_HERE,
                 depth < 1
                     ? "an abbreviated step is available only where the depth from the root is "
                         + "written down, that is in an absolute path that does not begin with a "
@@ -1069,7 +1070,7 @@ public final class ShortScriptParser {
             // An unnamed argument: the properties of the type, in the order the
             // metamodel declares in `unnamedArguments`.
             if (unnamed >= unnamedMapping.size()) {
-                throw error(ErrorCode.UNNAMED_ARGUMENT_NOT_ALLOWED,
+                throw error(SyntaxErrorCode.UNNAMED_ARGUMENT_NOT_ALLOWED,
                     unnamedMapping.isEmpty()
                         ? "the component type `" + type + "` admits no unnamed initializer argument"
                         : "the component type `" + type + "` admits "
