@@ -1,4 +1,4 @@
-package fr.cnrs.lacito.liftpatchbox.metamodel;
+package fr.cnrs.lacito.liftpatchbox.parser;
 
 import java.util.LinkedHashMap;
 import java.util.Map;

@@ -30,7 +30,6 @@ import fr.cnrs.lacito.liftpatchbox.metamodel.ComponentKind;
 import fr.cnrs.lacito.liftpatchbox.metamodel.ComponentTypeDef;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
-import fr.cnrs.lacito.liftpatchbox.metamodel.ShortCodes;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
