@@ -11,6 +11,7 @@ import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
 import fr.cnrs.lacito.liftpatchbox.model.Journal;
 import fr.cnrs.lacito.liftpatchbox.model.LiftModel;
+import fr.cnrs.lacito.liftpatchbox.timeline.Timeline;
 import fr.cnrs.lacito.liftpatchbox.validation.SemanticValidator;
 import java.util.List;
 import java.util.logging.Level;
@@ -168,8 +169,38 @@ public final class LiftPatchEngine {
             return Plan.ofStaticErrors(script.source(), script.syntaxName(), metamodel.version(),
                 errors.errors(), errors.warnings());
         }
-        Journal journal = new Journal();
+        try (Journal journal = new Journal(dictionary)) {
+            return run(dictionary, script, planOnly, journal);
+        }
+    }
+
+    private Plan run(LiftDictionary dictionary, Script script, boolean planOnly, Journal journal) {
         LiftModel model = new LiftModel(dictionary, metamodel, journal);
+        return newExecutor(model, journal).run(script, planOnly);
+    }
+
+    /**
+     * Apply a series of scripts to a dictionary, each in its own transaction, and
+     * record a timeline of it: the dictionary can then be brought to the state it
+     * had after any operation of the series, and the history of each entry read.
+     *
+     * @param dictionary the dictionary, left at the end of the series
+     * @param scripts    the scripts, in the order they are applied
+     * @return the timeline, to close when done
+     */
+    public Timeline record(LiftDictionary dictionary, List<Script> scripts) {
+        return Timeline.record(this, dictionary, scripts);
+    }
+
+    /**
+     * An executor configured as this engine configures its own: the renderer and the
+     * default languages. For code that drives execution itself, such as a timeline.
+     *
+     * @param model   the model adapter over the dictionary
+     * @param journal the journal recording the dictionary's changes
+     * @return a new executor, for one script
+     */
+    public Executor newExecutor(LiftModel model, Journal journal) {
         Executor executor = new Executor(model, metamodel, journal);
         executor.setRenderer(renderer);
         if (defaultObjectLanguage != null
@@ -180,6 +211,6 @@ public final class LiftPatchEngine {
             && model.hasLanguage(LanguageKind.META, defaultMetaLanguage)) {
             executor.bindDefaultLanguage(LanguageKind.META, defaultMetaLanguage);
         }
-        return executor.run(script, planOnly);
+        return executor;
     }
 }

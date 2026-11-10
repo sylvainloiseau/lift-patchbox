@@ -23,8 +23,11 @@
  *   <li>{@code engine} — selector resolution, execution, the plan document of
  *       Part 2, section 12.4.1, and the run summary;</li>
  *   <li>{@code model} — the one place that knows how the metamodel maps onto the
- *       {@code lift-api} dictionary model, and the journal that makes a script
- *       atomic;</li>
+ *       {@code lift-api} dictionary model, and the journal of the dictionary's
+ *       changes that makes a script atomic;</li>
+ *   <li>{@code timeline} — a series of scripts applied to a dictionary, which can
+ *       be brought to its state after any operation, and the history of each
+ *       entry;</li>
  *   <li>{@code error} — the error codes of Appendix B that the command model
  *       raises, and the interfaces every error and warning code implements.</li>
  * </ul>

@@ -2,8 +2,6 @@ package fr.cnrs.lacito.liftpatchbox.model;
 
 import fr.cnrs.lacito.liftapi.LiftDictionary;
 import fr.cnrs.lacito.liftapi.LiftDictionaryLanguagesManager;
-import fr.cnrs.lacito.liftapi.change.ChangeRecorder;
-import fr.cnrs.lacito.liftapi.change.ModelChange;
 import fr.cnrs.lacito.liftapi.model.AbstractExtensibleWithField;
 import fr.cnrs.lacito.liftapi.model.AbstractExtensibleWithoutField;
 import fr.cnrs.lacito.liftapi.model.AbstractIdentifiable;
@@ -47,8 +45,13 @@ import java.util.List;
 import java.util.Map;
 import java.util.Optional;
 import java.util.Set;
+import fr.cnrs.lacito.liftapi.change.ComponentAdded;
+import fr.cnrs.lacito.liftapi.change.ComponentRemoved;
+import fr.cnrs.lacito.liftapi.change.FormAdded;
+import fr.cnrs.lacito.liftapi.change.FormRemoved;
+import fr.cnrs.lacito.liftapi.change.ModelChange;
+import fr.cnrs.lacito.liftapi.change.ValueChanged;
 import java.util.function.IntConsumer;
-import java.util.function.Supplier;
 
 /**
  * The single place that knows how the LiftPatch metamodel maps onto the
@@ -99,9 +102,11 @@ import java.util.function.Supplier;
  *
  * <h2>Mutation and rollback</h2>
  *
- * <p>Every mutation goes through this class, and every mutation pushes its
- * inverse onto the {@link Journal}. That is what makes a script atomic without
- * copying the dictionary (Part 2, section 12.2).</p>
+ * <p>Every mutation goes through this class, and through the public API of the
+ * dictionary model, which reports each change it makes. The {@link Journal}
+ * records those changes, and reverts or reapplies them: that is what makes a
+ * script atomic without copying the dictionary (Part 2, section 12.2), and what
+ * lets a timeline move through what a series of scripts did.</p>
  */
 public final class LiftModel {
 
@@ -115,13 +120,44 @@ public final class LiftModel {
      *
      * @param dictionary the dictionary to read and write
      * @param metamodel  the metamodel the script is validated against
-     * @param journal    the journal every mutation records its inverse in
+     * @param journal    the journal recording the changes of the dictionary; what this
+     *                   adapter derives from the dictionary is invalidated whenever the
+     *                   journal reverts or reapplies changes
      */
     public LiftModel(LiftDictionary dictionary, Metamodel metamodel, Journal journal) {
         this.dictionary = dictionary;
         this.metamodel = metamodel;
-        this.journal = journal;
         this.homophones = new HomophoneNumbering(dictionary);
+        this.journal = journal;
+        journal.afterReplay(homophones::invalidate);
+        journal.attributeWith(LiftModel::entriesChangedBy);
+    }
+
+    /**
+     * The entries whose subtree a change changed, worked out when the change is made:
+     * the entry a component, a form or a value belongs to, the parent's for a
+     * component attached or removed, and the entry itself for an entry added or
+     * removed. A change of the header or of the language lists belongs to none.
+     *
+     * @param change the change, just made
+     * @return the entries, none or one
+     */
+    static Set<LiftEntry> entriesChangedBy(ModelChange change) {
+        Object where = switch (change) {
+            case ComponentAdded a -> a.subject() instanceof LiftEntry e ? e : a.parent();
+            case ComponentRemoved r -> r.subject() instanceof LiftEntry e ? e : r.parent();
+            case FormAdded f -> f.text().getParent();
+            case FormRemoved f -> f.text().getParent();
+            case ValueChanged<?> v -> v.owner() instanceof Form form
+                ? (form.getMultiText() == null ? null : form.getMultiText().getParent())
+                : v.owner();
+            default -> null;
+        };
+        AbstractLiftRoot node = where instanceof AbstractLiftRoot root ? root : null;
+        while (node != null && !(node instanceof LiftEntry)) {
+            node = node.getParentNode();
+        }
+        return node == null ? Set.of() : Set.of((LiftEntry) node);
     }
 
     /**
@@ -182,7 +218,7 @@ public final class LiftModel {
     }
 
     /**
-     * Add a language to the dictionary, recording its removal in the journal.
+     * Add a language to the dictionary.
      *
      * @param kind the language kind
      * @param code the language code
@@ -190,7 +226,6 @@ public final class LiftModel {
     public void createLanguage(LanguageKind kind, String code) {
         LiftDictionaryLanguagesManager manager = languages(kind);
         manager.addLanguage(code);
-        journal.record(() -> manager.removeLanguage(code));
     }
 
     /**
@@ -216,7 +251,7 @@ public final class LiftModel {
     }
 
     /**
-     * Remove a language from the dictionary, recording its restoration in the journal.
+     * Remove a language from the dictionary.
      *
      * @param kind the language kind
      * @param code the language code, which no text uses
@@ -224,7 +259,6 @@ public final class LiftModel {
     public void deleteLanguage(LanguageKind kind, String code) {
         LiftDictionaryLanguagesManager manager = languages(kind);
         manager.removeLanguage(code);
-        journal.record(() -> manager.addLanguage(code));
     }
 
     // ===================================================================
@@ -276,43 +310,6 @@ public final class LiftModel {
     }
 
     /**
-     * Run a change of the dictionary and record, in the journal, the revert of every
-     * change the dictionary model reports for it.
-     *
-     * <p>Used for the declarations ({@code declareFeatureSet}, {@code declareFeature},
-     * {@code declareTraitDefinition}...), which have no public inverse: the dictionary
-     * model only undoes them by reverting the change records it reports, and the
-     * cascade some of them trigger (traits rebound to a new definition) is reported
-     * with them.</p>
-     *
-     * @param change the change to run
-     * @param <T>    what it returns
-     * @return what the change returned
-     */
-    private <T> T recorded(Supplier<T> change) {
-        try (ChangeRecorder recorder = dictionary.recordChanges()) {
-            T result = change.get();
-            recorder.commit();
-            List<ModelChange> changes = recorder.changes();
-            if (!changes.isEmpty()) {
-                journal.record(() -> {
-                    for (int i = changes.size() - 1; i >= 0; i--) {
-                        changes.get(i).revert();
-                    }
-                });
-            }
-            return result;
-        }
-    }
-
-    private void recorded(Runnable change) {
-        recorded(() -> {
-            change.run();
-            return null;
-        });
-    }
-
-    /**
      * Make a feature set writable, declaring it when it is a built-in set the file
      * does not declare (Part 1, section 2.1.4).
      *
@@ -323,7 +320,7 @@ public final class LiftModel {
             throw new ExternalRangeException(fs.getId(), null);
         }
         if (!fs.isDeclared()) {
-            recorded(() -> header().declareFeatureSet(fs));
+            header().declareFeatureSet(fs);
         }
     }
 
@@ -331,8 +328,7 @@ public final class LiftModel {
      * The feature a command names as a value (a {@code type}, the {@code value} of a
      * category, a value of an option trait), declared: a value its feature set does not
      * declare is declared, and so is the set itself when it is a built-in set the file
-     * does not declare (Part 1, section 2.1.4). Each declaration is recorded in the
-     * journal.
+     * does not declare (Part 1, section 2.1.4).
      *
      * <p>A feature set defined in an external ranges file cannot be changed: a value
      * it already holds is used as it is, and a new one is refused.</p>
@@ -346,33 +342,30 @@ public final class LiftModel {
         if (fs.hasFeature(id)) {
             Feature existing = fs.getFeature(id);
             if (!existing.isDeclared() && !fs.isExternallyDefined()) {
-                recorded(() -> header().declareFeature(existing));
+                header().declareFeature(existing);
             }
             return existing;
         }
         if (fs.isExternallyDefined()) {
             throw new ExternalRangeException(fs.getId(), id);
         }
-        return recorded(() -> {
-            if (!fs.isDeclared()) {
-                header().declareFeatureSet(fs);
-            }
-            return fs.addFeature(id);
-        });
+        if (!fs.isDeclared()) {
+            header().declareFeatureSet(fs);
+        }
+        return fs.addFeature(id);
     }
 
     /**
-     * Declare a feature set, recording its removal in the journal.
+     * Declare a feature set.
      *
      * @param id the id of the new feature set
      */
     public void createFeatureSet(String id) {
         FeatureSet fs = header().addFeatureSet(id);
-        journal.record(() -> header().removeFeatureSet(fs));
     }
 
     /**
-     * Remove a feature set with its features, recording its restoration.
+     * Remove a feature set with its features.
      *
      * <p>Whether the set is in use is the dictionary model's question: a definition
      * taking it as its range, or one of its features used outside the set. What the
@@ -384,11 +377,10 @@ public final class LiftModel {
     public void deleteFeatureSet(String id) {
         FeatureSet fs = header().getFeatureSet(id);
         header().removeFeatureSet(fs);
-        journal.record(() -> header().addFeatureSet(fs));
     }
 
     /**
-     * Rename a feature set, recording the rename back. What refers to the set holds
+     * Rename a feature set. What refers to the set holds
      * the object, and follows.
      *
      * @param id    the current id
@@ -397,7 +389,6 @@ public final class LiftModel {
     public void renameFeatureSet(String id, String newId) {
         FeatureSet fs = header().getFeatureSet(id);
         header().renameFeatureSet(fs, newId);
-        journal.record(() -> header().renameFeatureSet(fs, id));
     }
 
     /**
@@ -438,7 +429,7 @@ public final class LiftModel {
     }
 
     /**
-     * Declare a feature in a feature set, recording its removal: a new one, or one the
+     * Declare a feature in a feature set: a new one, or one the
      * dictionary uses but its range does not declare. A built-in set the file does not
      * declare is declared with it.
      *
@@ -450,9 +441,7 @@ public final class LiftModel {
     }
 
     /**
-     * Remove a feature, recording its restoration: the same object comes back, so
-     * that what held it before the removal - restored by the journal too - still
-     * finds it.
+     * Remove a feature.
      *
      * @param featureSet the id of the feature set
      * @param id         the id of a feature no component uses
@@ -461,11 +450,10 @@ public final class LiftModel {
         FeatureSet fs = header().getFeatureSet(featureSet);
         requireWritable(fs);
         Feature f = fs.removeFeature(id);
-        journal.record(() -> fs.addFeature(f));
     }
 
     /**
-     * Rename a feature, recording the rename back. Every component typed by the
+     * Rename a feature. Every component typed by the
      * feature, every category and every trait value holding it now reads the new id:
      * they hold the {@code Feature} object, which compares by identity.
      *
@@ -479,7 +467,6 @@ public final class LiftModel {
         // renaming it is a change of the header.
         Feature f = featureFor(fs, id);
         fs.changeFeatureId(f, newId);
-        journal.record(() -> fs.changeFeatureId(f, id));
     }
 
     /**
@@ -518,7 +505,7 @@ public final class LiftModel {
     }
 
     /**
-     * Declare a field or trait definition, recording its removal.
+     * Declare a field or trait definition.
      *
      * @param field {@code true} for a field, {@code false} for a trait
      * @param name  the name of the new definition
@@ -533,19 +520,16 @@ public final class LiftModel {
         if (range != null) {
             fd.setResolvedRange(Optional.of(header().getFeatureSet(range)));
         }
-        journal.record(() -> header().removeFieldOrTraitDefinition(fd));
     }
 
     /**
-     * Remove a field or trait definition no field or trait uses, recording its
-     * restoration.
+     * Remove a field or trait definition no field or trait uses.
      *
      * @param name the name of the definition
      */
     public void deleteDefinition(String name) {
         LiftFieldAndTraitDefinition fd = header().getFieldsAndTraitsDefinitions(name);
         header().removeFieldOrTraitDefinition(fd);
-        journal.record(() -> header().addFieldOrTraitDefinition(fd));
     }
 
     // ===================================================================
@@ -967,7 +951,7 @@ public final class LiftModel {
     // ===================================================================
 
     /**
-     * Write a scalar property, recording the inverse in the journal.
+     * Write a scalar property.
      *
      * @param ref      the component
      * @param property the property name
@@ -987,25 +971,17 @@ public final class LiftModel {
             case LiftEntry _ -> throw unsupportedProperty("entry", property);
             case LiftEtymology y -> {
                 switch (property) {
-                    case "type" -> setFeature(
-                        y.getType(), value, dictionary.getHeader().getEtymologyTypeManager(),
+                    case "type" -> setFeature(value, dictionary.getHeader().getEtymologyTypeManager(),
                         f -> y.setType(f));
-                    case "source" -> {
-                        String old = y.getSource();
-                        y.setSource(value);
-                        journal.record(() -> y.setSource(old));
-                    }
+                    case "source" -> y.setSource(value);
                     default -> throw unsupportedProperty("etymology", property);
                 }
             }
             case LiftRelation r -> {
                 switch (property) {
-                    case "type" -> setFeature(
-                        r.getType(), value, dictionary.getHeader().getRelationTypeManager(),
+                    case "type" -> setFeature(value, dictionary.getHeader().getRelationTypeManager(),
                         f -> r.setType(f));
-                    case "target" -> setReference(
-                        value, r.getRefId().orElse(null), r.getRefObject(),
-                        r::setRefId, r::setRefObject);
+                    case "target" -> setReference(value, r::setRefId, r::setRefObject);
                     default -> throw unsupportedProperty("relation", property);
                 }
             }
@@ -1013,15 +989,13 @@ public final class LiftModel {
                 if (!"type".equals(property)) {
                     throw unsupportedProperty("reversal", property);
                 }
-                setFeature(l.getType(), value, dictionary.getHeader().getInverseTypeManager(),
+                setFeature(value, dictionary.getHeader().getInverseTypeManager(),
                     f -> l.setType(f));
             }
             case LiftTrait t -> {
                 switch (property) {
                     case "value" -> {
-                        Object old = t.getTypedValue();
                         t.setTypedValue(traitValue(t.getSpecification(), value));
-                        journal.record(() -> t.setTypedValue(old));
                     }
                     case "type" -> throw new UnsupportedByModelException(
                         "`trait.type` is read-only (section 4.5) and the validator refuses a "
@@ -1031,23 +1005,16 @@ public final class LiftModel {
             }
             case LiftAnnotation a -> {
                 switch (property) {
-                    case "type" -> setFeature(
-                        a.getType(), value, dictionary.getHeader().getAnnotationTypeManager(),
+                    case "type" -> setFeature(value, dictionary.getHeader().getAnnotationTypeManager(),
                         f -> a.setType(f));
                     case "value" -> {
-                        String old = a.getValue();
                         a.setValue(value);
-                        journal.record(() -> a.setValue(old));
                     }
                     case "when" -> {
-                        String old = a.getWhen();
                         a.setWhen(value);
-                        journal.record(() -> a.setWhen(old));
                     }
                     case "who" -> {
-                        String old = a.getWho();
                         a.setWho(value);
-                        journal.record(() -> a.setWho(old));
                     }
                     default -> throw unsupportedProperty("annotation", property);
                 }
@@ -1056,14 +1023,14 @@ public final class LiftModel {
                 if (!"type".equals(property)) {
                     throw unsupportedProperty("note", property);
                 }
-                setFeature(n.getType(), value,
+                setFeature(value,
                     dictionary.getHeader().getNoteTypeManager(), n::setType);
             }
             case LiftTranslation t -> {
                 if (!"type".equals(property)) {
                     throw unsupportedProperty("translation", property);
                 }
-                setFeature(t.getType(), value,
+                setFeature(value,
                     dictionary.getHeader().getTranslationTypeManager(), t::setType);
             }
             case LiftField _ -> {
@@ -1084,24 +1051,20 @@ public final class LiftModel {
                 if (!"url".equals(property)) {
                     throw unsupportedProperty("illustration", property);
                 }
-                String old = i.getHref();
                 i.setHref(value);
-                journal.record(() -> i.setHref(old));
             }
             case LiftMedia m -> {
                 if (!"url".equals(property)) {
                     throw unsupportedProperty("media", property);
                 }
-                String old = m.getHref();
                 m.setHref(value);
-                journal.record(() -> m.setHref(old));
             }
             default -> throw unsupportedProperty(ref.componentType(), property);
         }
     }
 
     /**
-     * Write one qualified value of a multitext property, recording the inverse.
+     * Write one qualified value of a multitext property.
      *
      * @param ref      the component
      * @param property the property name
@@ -1111,23 +1074,14 @@ public final class LiftModel {
     public void setQualified(ComponentRef ref, String property, String language, String value) {
         MultiText multitext = multitext(ref, property)
             .orElseThrow(() -> unsupportedProperty(ref.componentType(), property));
-        String old = multitext.getForm(language).map(Form::toPlainText).orElse(null);
         if (multitext.containsLang(language)) {
             multitext.removeForm(language);
         }
         multitext.add(new Form(language, value));
-        journal.record(() -> {
-            if (multitext.containsLang(language)) {
-                multitext.removeForm(language);
-            }
-            if (old != null) {
-                multitext.add(new Form(language, old));
-            }
-        });
     }
 
     /**
-     * Remove one qualified value of a multitext property, recording the inverse.
+     * Remove one qualified value of a multitext property.
      *
      * @param ref      the component
      * @param property the property name
@@ -1139,9 +1093,7 @@ public final class LiftModel {
         if (!multitext.containsLang(language)) {
             return;
         }
-        String old = multitext.getForm(language).map(Form::toPlainText).orElse(null);
         multitext.removeForm(language);
-        journal.record(() -> multitext.add(new Form(language, old)));
     }
 
     /**
@@ -1153,8 +1105,6 @@ public final class LiftModel {
      */
     private void setReference(
         String value,
-        String oldId,
-        AbstractIdentifiable oldObject,
         java.util.function.Consumer<String> idSetter,
         java.util.function.Consumer<AbstractIdentifiable> objectSetter
     ) {
@@ -1165,39 +1115,31 @@ public final class LiftModel {
         if (target != null) {
             objectSetter.accept(target);
         }
-        journal.record(() -> {
-            idSetter.accept(oldId);
-            objectSetter.accept(oldObject);
-        });
     }
 
     /**
-     * Write the {@code type} of a component, and record the inverse.
+     * Write the {@code type} of a component.
      *
      * <p>On a component whose parent holds its children keyed by type — a
      * {@code note}, a {@code translation} — {@code setType} delegates to that
      * parent's {@code retypeX}, which re-keys the child in place: the component
-     * keeps its identity, its text and its registration, and the inverse is simply
-     * writing the old type back. A duplicate key is refused by the dictionary model
+     * keeps its identity, its text and its registration. A duplicate key is refused by the dictionary model
      * with a {@link DuplicateTypeException}, which
      * {@link #setScalar(ComponentRef, String, String)}'s caller turns into the
      * language's own {@code CANNOT_CREATE_DUPLICATE}.</p>
      */
     private void setFeature(
-        Feature old, String value, FeatureSet manager, java.util.function.Consumer<Feature> setter
+        String value, FeatureSet manager, java.util.function.Consumer<Feature> setter
     ) {
         Feature fresh = value == null ? null : featureFor(manager, value);
         setter.accept(fresh);
-        journal.record(() -> setter.accept(old));
     }
 
     private void setCategoryValue(LiftSense sense, String value) {
         Optional<GrammaticalInfo> old = sense.getGrammaticalInfo();
-        Feature oldValue = old.map(GrammaticalInfo::getGramInfoValue).orElse(null);
         if (value == null) {
             if (old.isPresent()) {
                 sense.deleteGrammaticalInfo();
-                journal.record(() -> restoreCategory(sense, oldValue));
             }
             return;
         }
@@ -1206,16 +1148,6 @@ public final class LiftModel {
             sense.deleteGrammaticalInfo();
         }
         sense.setGrammaticalInfo(feature);
-        journal.record(() -> restoreCategory(sense, oldValue));
-    }
-
-    private void restoreCategory(LiftSense sense, Feature oldValue) {
-        if (sense.getGrammaticalInfo().isPresent()) {
-            sense.deleteGrammaticalInfo();
-        }
-        if (oldValue != null) {
-            sense.setGrammaticalInfo(oldValue);
-        }
     }
 
     /**
@@ -1289,7 +1221,7 @@ public final class LiftModel {
     }
 
     /**
-     * Create a component under a parent and record its removal in the journal.
+     * Create a component under a parent.
      *
      * @param parent   the parent component
      * @param spec     the component type and its initializers
@@ -1330,7 +1262,6 @@ public final class LiftModel {
     private ComponentRef createEntry(NewComponent spec) {
         LiftEntry entry = LiftEntry.create();
         dictionary.addEntry(entry);
-        journal.record(() -> dictionary.removeEntry(entry));
         homophones.invalidate();
         return new ComponentRef.Node("entry", entry);
     }
@@ -1339,11 +1270,9 @@ public final class LiftModel {
         LiftSense sense = LiftSense.create();
         AbstractLiftRoot node = requireNode(parent);
         if (node instanceof LiftEntry entry) {
-            insert(position, entry.getSenses(), i -> entry.addSense(i, sense),
-                () -> entry.deleteSense(sense));
+            insert(position, entry.getSenses(), i -> entry.addSense(i, sense));
         } else if (node instanceof LiftSense host) {
-            insert(position, host.getSenses(), i -> host.addSense(i, sense),
-                () -> host.deleteSense(sense));
+            insert(position, host.getSenses(), i -> host.addSense(i, sense));
         } else {
             throw unsupportedParent(parent, "sense");
         }
@@ -1353,8 +1282,7 @@ public final class LiftModel {
     private ComponentRef createExample(ComponentRef parent, NewComponent spec, Integer position) {
         LiftSense sense = requireType(parent, LiftSense.class, "example");
         LiftExample example = LiftExample.create();
-        insert(position, sense.getExamples(), i -> sense.addExample(i, example),
-            () -> sense.deleteExample(example));
+        insert(position, sense.getExamples(), i -> sense.addExample(i, example));
         return new ComponentRef.Node("example", example);
     }
 
@@ -1363,15 +1291,13 @@ public final class LiftModel {
         Feature type = featureFor(header().getEtymologyTypeManager(), required(spec, "type", "etymology"));
         LiftEtymology etymology = LiftEtymology.create(type, spec.scalar("source"));
         entry.addEtymology(etymology);
-        journal.record(() -> entry.deleteEtymology(etymology));
         return new ComponentRef.Node("etymology", etymology);
     }
 
     private ComponentRef createVariant(ComponentRef parent, NewComponent spec, Integer position) {
         LiftEntry entry = requireType(parent, LiftEntry.class, "variant");
         LiftVariant variant = new LiftVariant();
-        insert(position, entry.getVariants(), i -> entry.addVariant(i, variant),
-            () -> entry.deleteVariant(variant));
+        insert(position, entry.getVariants(), i -> entry.addVariant(i, variant));
         return new ComponentRef.Node("variant", variant);
     }
 
@@ -1382,11 +1308,11 @@ public final class LiftModel {
         AbstractLiftRoot node = requireNode(parent);
         switch (node) {
             case LiftEntry entry -> insert(position, entry.getRelations(),
-                i -> entry.addRelation(i, relation), () -> entry.deleteRelation(relation));
+                i -> entry.addRelation(i, relation));
             case LiftSense sense -> insert(position, sense.getRelations(),
-                i -> sense.addRelation(i, relation), () -> sense.deleteRelation(relation));
+                i -> sense.addRelation(i, relation));
             case LiftVariant variant -> insert(position, variant.getRelations(),
-                i -> variant.addRelation(i, relation), () -> variant.deleteRelation(relation));
+                i -> variant.addRelation(i, relation));
             default -> throw unsupportedParent(parent, "relation");
         }
         return new ComponentRef.Node("relation", relation);
@@ -1399,11 +1325,9 @@ public final class LiftModel {
         AbstractLiftRoot node = requireNode(parent);
         switch (node) {
             case LiftEntry entry -> insert(position, entry.getPronunciations(),
-                i -> entry.addPronunciation(i, pronunciation),
-                () -> entry.deletePronunciation(pronunciation));
+                i -> entry.addPronunciation(i, pronunciation));
             case LiftVariant variant -> insert(position, variant.getPronunciations(),
-                i -> variant.addPronunciation(i, pronunciation),
-                () -> variant.deletePronunciation(pronunciation));
+                i -> variant.addPronunciation(i, pronunciation));
             default -> throw unsupportedParent(parent, "pronunciation");
         }
         return new ComponentRef.Node("pronunciation", pronunciation);
@@ -1416,7 +1340,7 @@ public final class LiftModel {
         LiftIllustration illustration =
             new LiftIllustration(required(spec, "url", "illustration"));
         insert(position, sense.getIllustrations(),
-            i -> sense.addIllustration(i, illustration), () -> sense.deleteIllustration(illustration));
+            i -> sense.addIllustration(i, illustration));
         return new ComponentRef.Node("illustration", illustration);
     }
 
@@ -1424,7 +1348,7 @@ public final class LiftModel {
         LiftPronunciation pronunciation = requireType(parent, LiftPronunciation.class, "media");
         LiftMedia media = new LiftMedia(required(spec, "url", "media"));
         insert(position, pronunciation.getMedias(),
-            i -> pronunciation.addMedia(i, media), () -> pronunciation.deleteMedia(media));
+            i -> pronunciation.addMedia(i, media));
         return new ComponentRef.Node("media", media);
     }
 
@@ -1434,7 +1358,7 @@ public final class LiftModel {
         AbstractLiftRoot node = requireNode(parent);
         switch (node) {
             case LiftSense sense -> insert(position, sense.getReversals(),
-                i -> sense.addReversal(i, reversal), () -> sense.deleteReversal(reversal));
+                i -> sense.addReversal(i, reversal));
             default -> throw unsupportedParent(parent, "reversal");
         }
         return new ComponentRef.Node("reversal", reversal);
@@ -1453,18 +1377,15 @@ public final class LiftModel {
                     "the sense has no grammatical information to carry a trait; write its `value` "
                         + "first"));
             info.addTrait(trait);
-            journal.record(() -> info.deleteTrait(trait));
             return new ComponentRef.Node("trait", trait);
         }
         AbstractLiftRoot node = requireNode(parent);
         if (node instanceof AbstractExtensibleWithoutField host) {
-            insert(position, host.getTraits(), i -> host.addTrait(i, trait),
-                () -> host.deleteTrait(trait));
+            insert(position, host.getTraits(), i -> host.addTrait(i, trait));
             return new ComponentRef.Node("trait", trait);
         }
         if (node instanceof GrammaticalInfo info) {
             info.addTrait(trait);
-            journal.record(() -> info.deleteTrait(trait));
             return new ComponentRef.Node("trait", trait);
         }
         throw unsupportedParent(parent, "trait");
@@ -1481,12 +1402,11 @@ public final class LiftModel {
         AbstractLiftRoot node = requireNode(parent);
         if (node instanceof AbstractExtensibleWithoutField host) {
             insert(position, host.getAnnotations(),
-                i -> host.addAnnotation(i, annotation), () -> host.deleteAnnotation(annotation));
+                i -> host.addAnnotation(i, annotation));
             return new ComponentRef.Node("annotation", annotation);
         }
         if (node instanceof LiftTrait trait) {
             trait.addAnnotation(annotation);
-            journal.record(() -> trait.deleteAnnotation(annotation));
             return new ComponentRef.Node("annotation", annotation);
         }
         throw unsupportedParent(parent, "annotation");
@@ -1497,7 +1417,6 @@ public final class LiftModel {
         LiftNote note = LiftNote.create();
         note.setType(featureFor(header().getNoteTypeManager(), required(spec, "type", "note")));
         host.addNote(note);
-        journal.record(() -> host.deleteNote(note));
         return new ComponentRef.Node("note", note);
     }
 
@@ -1506,33 +1425,32 @@ public final class LiftModel {
             requireType(parent, AbstractExtensibleWithField.class, "field");
         LiftField field = LiftField.create(fieldSpecification(required(spec, "type", "field")));
         host.addField(field);
-        journal.record(() -> host.deleteField(field));
         return new ComponentRef.Node("field", field);
     }
 
     /**
      * What the type of a new trait refers to: its definition, or the feature set it is
      * named after (whose features are its values). A name that refers to neither is
-     * declared, with the default data model of a trait, and the declaration recorded
+     * declared, with the default data model of a trait
      * (Part 1, section 2.1.5).
      */
     private TraitSpecification traitSpecification(String name) {
         TraitSpecification resolved = header().resolveTraitSpecification(name);
         if (resolved instanceof UndeclaredName) {
-            return recorded(() -> header().declareTraitDefinition(name));
+            return header().declareTraitDefinition(name);
         }
         return resolved;
     }
 
     /**
      * The definition of the type of a new field. A name that has none is declared,
-     * with the default data model of a field, and the declaration recorded (Part 1,
+     * with the default data model of a field (Part 1,
      * section 2.1.5).
      */
     private FieldSpecification fieldSpecification(String name) {
         FieldSpecification resolved = header().resolveFieldSpecification(name);
         if (resolved instanceof UndeclaredName) {
-            return recorded(() -> header().declareFieldDefinition(name));
+            return header().declareFieldDefinition(name);
         }
         return resolved;
     }
@@ -1542,7 +1460,6 @@ public final class LiftModel {
         Feature key = featureFor(header().getTranslationTypeManager(), required(spec, "type", "translation"));
         LiftTranslation translation = LiftTranslation.create(key);
         example.addTranslation(translation);
-        journal.record(() -> example.deleteTranslation(translation));
         return new ComponentRef.Node("translation", translation);
     }
 
@@ -1573,11 +1490,9 @@ public final class LiftModel {
      * @param position the 1-based position, or {@code null} for the last one
      * @param siblings the current same-type siblings, read only for their number
      * @param addAt    adds the component at a 0-based index
-     * @param remove   the inverse, recorded in the journal
      */
-    private void insert(Integer position, List<?> siblings, IntConsumer addAt, Runnable remove) {
+    private void insert(Integer position, List<?> siblings, IntConsumer addAt) {
         addAt.accept(indexWithin(position == null ? -1 : position - 1, siblings));
-        journal.record(remove);
     }
 
     /**
@@ -1590,7 +1505,7 @@ public final class LiftModel {
     }
 
     /**
-     * Delete a component with its descendants, recording its restoration.
+     * Delete a component with its descendants.
      *
      * @param ref the component to delete
      * @throws UnsupportedByModelException if the dictionary model cannot remove it
@@ -1607,23 +1522,23 @@ public final class LiftModel {
         // and the reference is reported as dangling rather than repaired. The
         // inbound references are therefore unlinked, the component removed, and the
         // inbound references put back, still pointing at the component that is gone.
-        List<Runnable> restoreInbound = detachInboundReferences(ref);
+        // Unlinking and restoring the references changes nothing in the referring
+        // entries, once the deletion is over: their changes are attributed to none.
+        List<Runnable> restoreInbound = journal.unattributed(() -> detachInboundReferences(ref));
 
         if (child instanceof LiftEntry entry) {
-            int index = dictionary.getLiftDictionaryRegistry().getEntries().indexOf(entry);
-            dictionary.removeEntry(entry);
+                dictionary.removeEntry(entry);
             homophones.invalidate();
-            journal.record(() -> {
-                dictionary.addEntry(entry, Math.max(0, index));
-                homophones.invalidate();
-            });
+
         } else {
             AbstractLiftRoot parent = child.getParentNode();
             int position = indexOfSibling(parent, child);
             deleteFromParent(parent, child);
-            journal.record(() -> reattach(parent, child, position));
         }
-        restoreInbound.forEach(Runnable::run);
+        journal.unattributed(() -> {
+            restoreInbound.forEach(Runnable::run);
+            return null;
+        });
     }
 
     /**
@@ -1780,17 +1695,11 @@ public final class LiftModel {
      */
     public void move(ComponentRef ref, ComponentRef newParent, int position) {
         AbstractLiftRoot child = ((ComponentRef.Node) ref).node();
-        AbstractLiftRoot oldParent = child.getParentNode();
-        int oldPosition = indexOfSibling(oldParent, child);
-
         // `detach` unlinks without unregistering, which is the model's documented
         // way of moving a subtree inside one dictionary.
         child.detach();
         reattach(requireNode(newParent), child, position - 1);
-        journal.record(() -> {
-            child.detach();
-            reattach(oldParent, child, oldPosition);
-        });
+
     }
 
     // ===================================================================

@@ -68,6 +68,7 @@ public final class Executor {
     private final Resolver resolver;
 
     private final List<Operation> operations = new ArrayList<>();
+    private final List<Integer> operationMarks = new ArrayList<>();
     private final List<LiftPatchWarning> warnings = new ArrayList<>();
     private final Summary summary = new Summary();
     private final Map<String, DeletedTarget> deleted = new LinkedHashMap<>();
@@ -128,7 +129,7 @@ public final class Executor {
     }
 
     /**
-     * Run a script.
+     * Run a script, then commit it, or roll it back in plan mode or when it fails.
      *
      * @param script   the validated script
      * @param planOnly whether to roll the run back at the end instead of committing
@@ -136,6 +137,30 @@ public final class Executor {
      * @return the plan document describing what the script did, or would do
      */
     public Plan run(Script script, boolean planOnly) {
+        Plan plan = execute(script);
+        if (planOnly || !plan.isOk()) {
+            journal.rollback();
+        } else {
+            journal.commit();
+        }
+        LOGGER.log(Level.FINE, () -> (planOnly ? "Planned " : "Applied ")
+            + operations.size() + " operation(s) on " + script.source());
+        return plan;
+    }
+
+    /**
+     * Run a script and leave its changes in the journal, neither committed nor rolled
+     * back: what to do with them is the caller's decision. A timeline uses this to
+     * keep what each operation changed.
+     *
+     * <p>After the call, {@link #operationMarks()} gives the position the journal had
+     * reached when each operation of the plan was complete.</p>
+     *
+     * @param script the validated script
+     * @return the plan document describing what the script did; its status is
+     *         {@code "error"} when a command failed
+     */
+    public Plan execute(Script script) {
         operationIndex = 0;
         LiftPatchError failure = null;
         try {
@@ -145,20 +170,15 @@ public final class Executor {
             operations.add(new Operation(
                 failure.operationIndex(), failure.position(), null, null, null,
                 null, null, List.of(), null, failure));
+            // The failing state: every change made before the failure, those of a
+            // block already undone included, which the journal still holds.
+            operationMarks.add(journal.recorded());
         }
 
         if (failure != null) {
             LOGGER.log(Level.SEVERE, failure::format);
         }
         List<DanglingReference> dangling = failure == null ? findDanglingReferences() : List.of();
-
-        if (planOnly || failure != null) {
-            journal.rollback();
-        } else {
-            journal.commit();
-        }
-        LOGGER.log(Level.FINE, () -> (planOnly ? "Planned " : "Applied ")
-            + operations.size() + " operation(s) on " + script.source());
 
         return new Plan(
             script.source(),
@@ -172,6 +192,21 @@ public final class Executor {
             operations,
             dangling,
             summary);
+    }
+
+    /**
+     * The position of the journal when each operation was complete, in the order of
+     * the plan's operations.
+     *
+     * @return one journal mark per operation
+     */
+    public List<Integer> operationMarks() {
+        return List.copyOf(operationMarks);
+    }
+
+    private void addOperation(Operation operation) {
+        operations.add(operation);
+        operationMarks.add(journal.mark());
     }
 
     // ===================================================================
@@ -208,7 +243,7 @@ public final class Executor {
                     if (selector.label() != null) {
                         resolver.bindLabel(selector.label(), resolved);
                     }
-                    operations.add(new Operation(index, selector.position(),
+                    addOperation(new Operation(index, selector.position(),
                         renderer.render(selector.chain()), "select", null,
                         targetInfo(resolved, selector.label()),
                         targetInfo(model.parentOf(resolved), null),
@@ -221,7 +256,10 @@ public final class Executor {
         } catch (RuntimeException e) {
             // A block is a nested transaction boundary: a failing child rolls the
             // block back, and the block then fails the script around it.
-            journal.rollbackTo(mark);
+            // The changes are undone but kept, past the journal's cursor: a failure
+            // inside a block fails the script, and a timeline still shows the state
+            // the failing command reached.
+            journal.undoTo(mark);
             throw e;
         } finally {
             languages.pop();
@@ -250,7 +288,7 @@ public final class Executor {
             case Directive.DefinitionDelete d -> definitionDelete(d);
         };
         summary.count(effect);
-        operations.add(new Operation(index, directive.position(), renderer.render(directive),
+        addOperation(new Operation(index, directive.position(), renderer.render(directive),
             directive.keyword(), null, null, null, List.of(effect), null, null));
     }
 
@@ -476,7 +514,7 @@ public final class Executor {
             resolver.bindLabel(command.label(), created);
         }
         effects.forEach(summary::count);
-        operations.add(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.position(), text(command),
             "create", null, targetInfo(created, command.label()), targetInfo(parent, null),
             effects, null, null));
         return created;
@@ -615,7 +653,7 @@ public final class Executor {
             resolver.bindLabel(command.label(), component);
         }
         effects.forEach(summary::count);
-        operations.add(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.position(), text(command),
             "upsert", null, targetInfo(component, command.label()), targetInfo(parent, null),
             effects, null, null));
         return component;
@@ -716,7 +754,7 @@ public final class Executor {
         if (command.label() != null) {
             resolver.bindLabel(command.label(), component);
         }
-        operations.add(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.position(), text(command),
             "ensure", null, targetInfo(component, command.label()),
             targetInfo(model.parentOf(component), null), List.of(), null, null));
         return component;
@@ -759,7 +797,7 @@ public final class Executor {
                 effects.add(effect);
             }
         }
-        operations.add(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.position(), text(command),
             "delete", marked ? command.target().multiplicity().spelling() : null,
             marked || targets.isEmpty() ? null : targetInfo(targets.get(0), null),
             null, marked ? null : effects, applications, null));
@@ -840,7 +878,7 @@ public final class Executor {
         Effect effect = Effect.moved(type, from, model.positionOf(target).orElse(to),
             path(sourceParent), path(destination));
         summary.count(effect);
-        operations.add(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.position(), text(command),
             "move", null, targetInfo(target, null), targetInfo(destination, null),
             List.of(effect), null, null));
         return target;
@@ -900,7 +938,7 @@ public final class Executor {
                 effects.addAll(local);
             }
         }
-        operations.add(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.position(), text(command),
             verb.keyword(), marked ? target.head().multiplicity().spelling() : null,
             marked || components.isEmpty() ? null : targetInfo(components.get(0), null),
             null, marked ? null : effects, applications, null));

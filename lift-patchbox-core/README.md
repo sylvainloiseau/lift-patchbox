@@ -60,6 +60,36 @@ if (plan.isOk()) {
 - `withRenderer(CommandRenderer)` sets how commands are written in plan
   documents and error messages; by default, in the notation of Part 2.
 
+## Timeline
+
+A series of scripts can be applied with a record of everything it did:
+
+```java
+try (Timeline timeline = engine.record(dictionary, List.of(script1, script2, script3))) {
+    timeline.seek(timeline.positions().get(12));        // the dictionary as it was then
+    for (TimelineOperation op : timeline.historyOf("e-3")) {
+        // every operation that changed entry e-3, its senses, examples...
+    }
+}                                                       // back to the end of the series
+```
+
+- Each script runs in its own transaction, as `apply` would run it. A script with
+  a static error is `REJECTED` and has no position; a script whose command fails
+  is `FAILED` and rolled back, and the next script starts from the state before
+  it.
+- `positions()` are the start, then one position after each operation. The
+  positions of a failed script can be sought, for debugging: they are not
+  `isCommitted()`, and show the state the script had reached.
+- Seeking changes the dictionary in place, by reverting or reapplying the changes
+  the dictionary model reported (`ModelChange` in `lift-api`), on the same
+  objects: a component keeps its identity and its id. Nothing else may change the
+  dictionary while the timeline is open; `addSeekListener` tells a GUI when to
+  read it again.
+- `historyOf(entryId)` lists the committed operations that changed the entry's
+  subtree, including its creation and its deletion; `historyOf(entryId, true)`
+  adds those of failed scripts. A move between entries belongs to both; a
+  reference left dangling by a deletion does not change the entry holding it.
+
 ## Specification
 
 `specification.md`, at the root of the repository, is normative. The sections
@@ -86,13 +116,15 @@ Part 3 belong to `lift-patchbox-language`.
 | `…ast` | The immutable command model, and `LiftPatch`, the fluent API that builds it. |
 | `…validation` | Every error that depends only on the script and the metamodel, collected rather than thrown. |
 | `…engine` | Selector resolution, execution, the plan document, the run summary. |
-| `…model` | The mapping of the metamodel onto the `lift-api` dictionary model, and the journal that makes a script atomic. |
+| `…model` | The mapping of the metamodel onto the `lift-api` dictionary model, and the journal of the dictionary's changes, which makes a script atomic. |
+| `…timeline` | A series of scripts applied to a dictionary: positions, seeking, the history of each entry. |
 | `…metamodel` | The normative metamodel of Appendix A. |
 | `…error` | The error and warning codes, and the interfaces every code implements. |
 
 ## Tests
 
-`EngineTest` drives the engine with scripts built in Java. The fixtures — the
+`EngineTest` drives the engine with scripts built in Java, and `TimelineTest`
+the timeline. The fixtures — the
 standard dictionary of Appendix D.2 (`StandardFixture`) and the Tuwuli field
 dictionary (`TuwuliDictionary`) — and `EngineTestSupport` are published in this
 module's test jar, which the language module's tests reuse.

@@ -83,7 +83,7 @@ with one version under the group `io.github.sylvainloiseau`:
 | Artifact | Directory | What it holds |
 |---|---|---|
 | `lift-patchbox` | `.` | The parent POM: versions, plugin configuration, release profile. It also holds `specification.md`, which covers both libraries. |
-| `lift-patchbox-core` | `lift-patchbox-core/` | The command model, independent of any surface syntax: the `LiftPatch` fluent builder, static validation against the metamodel, plan mode, and the transactional executor over the `lift-api` dictionary model. See [its README](lift-patchbox-core/README.md). |
+| `lift-patchbox-core` | `lift-patchbox-core/` | The command model, independent of any surface syntax: the `LiftPatch` fluent builder, static validation against the metamodel, plan mode, the transactional executor over the `lift-api` dictionary model, and the timeline of a series of scripts. See [its README](lift-patchbox-core/README.md). |
 | `lift-patchbox-language` | `lift-patchbox-language/` | The two surface syntaxes, LiftPatchRef and LiftPatchShort: their parsers, which produce the core's command model, and the command-line tool. It depends on the core. See [its README](lift-patchbox-language/README.md). |
 
 An application that edits dictionaries from scripts depends on
@@ -192,7 +192,8 @@ metamodel, and is rejected with the same error codes as a parsed one.
 | core | `ast` | One immutable command model shared by both syntaxes, and `LiftPatch`, the fluent API that builds it. |
 | core | `validation` | Every error that depends only on the script and the metamodel, collected rather than thrown. |
 | core | `engine` | Selector resolution, execution, the plan document, the run summary. |
-| core | `model` | The one place that knows how the metamodel maps onto the `lift-api` dictionary model, and the journal that makes a script atomic. |
+| core | `model` | The one place that knows how the metamodel maps onto the `lift-api` dictionary model, and the journal of the dictionary's changes, which makes a script atomic. |
+| core | `timeline` | A series of scripts applied to a dictionary, which can be brought to its state after any operation, and the history of each entry. |
 | core | `error` | The error and warning codes the command model raises, and the interfaces every code implements. |
 | language | `language.parser` | The two ANTLR grammars, the concise-syntax preprocessor, the short-code tables, and the two visitors. |
 | language | `language.error` | The error and warning codes only a parser raises. |
@@ -241,6 +242,8 @@ tag. It needs four repository secrets, listed at the top of the workflow file.
 | Module | Suite | What it checks |
 |---|---|---|
 | core | `EngineTest` | Scripts built with `LiftPatch` and run by `LiftPatchEngine`: each verb, labels, blocks, directives, static and dynamic errors, rollback, plan mode. |
+| core | `TimelineTest` | Positions and seeking, object identity across seeks, rejected and failed scripts, the history of an entry. |
+| language | `TimelineReplayTest` | Every corpus script, the whole corpus as one series, and that series on the Tuwuli dictionary: each position is the same saved document whether reached forward or backward. |
 | language | `ConformanceCorpusTest` | The cases of Appendix D, run exactly as D.1 defines the comparison. |
 | language | `SpecificationExamplesTest` | Every fenced `LiftPatchRef` and `LiftPatchShort` example of `specification.md` parses and is statically valid. |
 | language | `ComponentCommandsTest`, `PropertyCommandsTest` | The eight verbs, grouped by verb. |

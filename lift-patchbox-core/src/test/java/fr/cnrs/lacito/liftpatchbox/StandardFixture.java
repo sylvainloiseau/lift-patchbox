@@ -135,4 +135,20 @@ public final class StandardFixture {
     public static List<String> metaLanguages() {
         return Json.strings(Json.parseObject(read()), "metaLanguages");
     }
+
+    /**
+     * A dictionary as the LIFT document it saves to, for comparing two states of it.
+     *
+     * @param dictionary the dictionary
+     * @return the document
+     */
+    public static String xml(LiftDictionary dictionary) {
+        java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+        try {
+            dictionary.save(out);
+        } catch (fr.cnrs.lacito.liftapi.WrittingLiftDocumentException e) {
+            throw new IllegalStateException(e);
+        }
+        return out.toString(StandardCharsets.UTF_8);
+    }
 }
