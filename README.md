@@ -75,6 +75,27 @@ The complete DSL language allows to create/update/delete any kind of nodes in th
 
 ### Reference syntax
 
+## Modules
+
+The repository is a Maven build of two libraries, published to Maven Central
+with one version under the group `io.github.sylvainloiseau`:
+
+| Artifact | Directory | What it holds |
+|---|---|---|
+| `lift-patchbox` | `.` | The parent POM: versions, plugin configuration, release profile. It also holds `specification.md`, which covers both libraries. |
+| `lift-patchbox-core` | `lift-patchbox-core/` | The command model, independent of any surface syntax: the `LiftPatch` fluent builder, static validation against the metamodel, plan mode, and the transactional executor over the `lift-api` dictionary model. See [its README](lift-patchbox-core/README.md). |
+| `lift-patchbox-language` | `lift-patchbox-language/` | The two surface syntaxes, LiftPatchRef and LiftPatchShort: their parsers, which produce the core's command model, and the command-line tool. It depends on the core. See [its README](lift-patchbox-language/README.md). |
+
+An application that edits dictionaries from scripts depends on
+`lift-patchbox-language`, which brings the core with it. An application that
+builds its mutations in Java, and never parses a script, depends on
+`lift-patchbox-core` alone.
+
+`io.github.sylvainloiseau:lift-patchbox` names the parent POM, which holds no
+code. A project that depended on a `lift-patchbox` jar depends on
+`lift-patchbox-language` instead, or on `lift-patchbox-core` for the command
+model alone.
+
 ## Command-line usage
 
 The Maven build produces an executable JAR:
@@ -83,23 +104,23 @@ The Maven build produces an executable JAR:
 mvn package
 ```
 
-`target/lift-patchbox-0.1-SNAPSHOT-jar-with-dependencies.jar` is self-contained.
+`lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar` is self-contained.
 
 ```bash
 # patch an existing dictionary
-java -jar target/lift-patchbox-0.1-SNAPSHOT-jar-with-dependencies.jar \
+java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
   edits.liftpatchs tww.lift tww-patched.lift --syntax concise
 
 # start from an empty dictionary: only the output path is given
-java -jar target/lift-patchbox-0.1-SNAPSHOT-jar-with-dependencies.jar \
+java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
   edits.liftpatch new.lift
 
 # see what a script would do, and change nothing
-java -jar target/lift-patchbox-0.1-SNAPSHOT-jar-with-dependencies.jar \
+java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
   edits.liftpatch tww.lift out.lift --plan
 
 # emit the plan document of section 12.4.1 as JSON
-java -jar target/lift-patchbox-0.1-SNAPSHOT-jar-with-dependencies.jar \
+java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
   edits.liftpatch tww.lift out.lift --plan --json
 ```
 
@@ -126,6 +147,9 @@ unwritten.
 
 ## Programmatic usage
 
+Scripts written in either syntax go through `LiftPatchBox`, in
+`lift-patchbox-language`:
+
 ```java
 LiftDictionary dictionary = LiftDictionary.loadDictionaryFromFile(new File("tww.lift"));
 
@@ -140,11 +164,11 @@ if (plan.isOk()) {
 }
 ```
 
-Commands can also be built without writing a script at all, through the same
-fluent API the two parsers use:
+Commands can also be built without writing a script at all, with the fluent API
+of `lift-patchbox-core`, and run by its `LiftPatchEngine`:
 
 ```java
-Script script = LiftPatch.script(Syntax.REFERENCE)
+Script script = LiftPatch.script()
     .add(LiftPatch.create("sense")
             .init("gloss", "en", "pig")
             .under(LiftPatch.chain(LiftPatch.step("entry").eq("form", "tww", "mami")))
@@ -153,6 +177,8 @@ Script script = LiftPatch.script(Syntax.REFERENCE)
             .assign("definition", "en", "A four-legged terrestrial animal")
             .on(LiftPatch.chain(LiftPatch.label("pig"))))
     .build();
+
+Plan plan = new LiftPatchEngine().withDefaultObjectLanguage("tww").apply(dictionary, script);
 ```
 
 A command built that way is checked by the same validator, against the same
@@ -160,68 +186,77 @@ metamodel, and is rejected with the same error codes as a parsed one.
 
 ## How the code is laid out
 
-| Package | What it holds |
-|---|---|
-| `metamodel` | The normative metamodel of Appendix A, loaded from the very JSON document the specification prints, and the short-code tables of the concise syntax. |
-| `ast` | One immutable command model shared by both syntaxes, and `LiftPatch`, the fluent API that builds it. |
-| `parser` | The two ANTLR grammars, the concise-syntax preprocessor, and the two visitors. |
-| `validation` | Every error that depends only on the script text and the metamodel, collected rather than thrown. |
-| `engine` | Selector resolution, execution, the plan document, the run summary. |
-| `model` | The one place that knows how the metamodel maps onto the `lift-api` dictionary model, and the journal that makes a script atomic. |
-| `error` | The codes of Appendix B, with their kinds. |
-| `cli` | The command-line tool. |
+| Module | Package | What it holds |
+|---|---|---|
+| core | `metamodel` | The normative metamodel of Appendix A, loaded from the very JSON document the specification prints. |
+| core | `ast` | One immutable command model shared by both syntaxes, and `LiftPatch`, the fluent API that builds it. |
+| core | `validation` | Every error that depends only on the script and the metamodel, collected rather than thrown. |
+| core | `engine` | Selector resolution, execution, the plan document, the run summary. |
+| core | `model` | The one place that knows how the metamodel maps onto the `lift-api` dictionary model, and the journal that makes a script atomic. |
+| core | `error` | The error and warning codes the command model raises, and the interfaces every code implements. |
+| language | `language.parser` | The two ANTLR grammars, the concise-syntax preprocessor, the short-code tables, and the two visitors. |
+| language | `language.error` | The error and warning codes only a parser raises. |
+| language | `language.cli` | The command-line tool. |
 
 Both surface syntaxes produce the same command objects: a LiftPatchShort path,
 written ancestor first, is reversed into the child-first chain the reference
 syntax writes, and the concise abbreviations are expanded. Everything
 downstream — validation, resolution, execution, plan mode — is therefore written
-once.
+once, in the core.
 
 ## Building
 
 ```bash
-mvn clean package     # generates the parsers, compiles, tests, builds the JARs
-mvn test              # the test suite alone
-mvn javadoc:javadoc   # the API documentation, under target/reports/apidocs
+mvn clean package     # generates the parsers, compiles, tests, builds the JARs of both modules
+mvn test              # the test suites alone
+mvn javadoc:javadoc   # the API documentation, under each module's target/reports/apidocs
 ```
 
 The dictionary model, `io.github.sylvainloiseau:lift-api`, is fetched from Maven
-Central; its version is the `lift-api.version` property of `pom.xml`. The ANTLR sources are `src/main/antlr4/.../LiftPatchRef.g4` and
+Central; its version is the `lift-api.version` property of the parent `pom.xml`.
+The ANTLR sources are
+`lift-patchbox-language/src/main/antlr4/.../LiftPatchRef.g4` and
 `LiftPatchShort.g4`; `mvn generate-sources` regenerates the parsers into
-`target/generated-sources/antlr4` on its own, so there is nothing to check in.
+`lift-patchbox-language/target/generated-sources/antlr4` on its own, so there is
+nothing to check in.
 
 ## Releasing
 
-lift-patchbox is published to Maven Central as
-`io.github.sylvainloiseau:lift-patchbox` by `.github/workflows/release.yml`, when a
-version tag is pushed:
+`.github/workflows/release.yml` publishes the three artifacts —
+`lift-patchbox` (the parent POM), `lift-patchbox-core` and
+`lift-patchbox-language` — to Maven Central when a version tag is pushed:
 
 ```bash
 git tag v0.1.0 && git push origin v0.1.0
 ```
 
-The version released is the tag without its `v`; the pom keeps its `-SNAPSHOT`
-version. The workflow builds and tests the library, signs it and uploads it with
-its sources and javadoc (`mvn -P release deploy`), then attaches the command-line
-jar with its dependencies to the GitHub release of the tag. It needs four
-repository secrets, listed at the top of the workflow file.
+The version released is the tag without its `v`; the poms keep their
+`-SNAPSHOT` version. The workflow builds and tests both libraries, signs them and
+uploads them with their sources and javadoc (`mvn -P release deploy`), then
+attaches the command-line jar with its dependencies to the GitHub release of the
+tag. It needs four repository secrets, listed at the top of the workflow file.
 
 ## Tests
 
-| Suite | What it checks |
-|---|---|
-| `ConformanceCorpusTest` | The 80 cases of Appendix D, run exactly as D.1 defines the comparison. |
-| `SpecificationExamplesTest` | Every fenced `LiftPatchRef` and `LiftPatchShort` example of `specification.md` parses and is statically valid. |
-| `ComponentCommandsTest`, `PropertyCommandsTest` | The eight verbs, grouped by verb. |
-| `SelectionTest` | The seven selection strategies, the two axes, the pseudo-properties, multiplicity, references. |
-| `ConstructsTest` | Blocks, labels, language scoping, embedded initializers, atomicity, plan mode. |
-| `ConciseSyntaxTest` | Line recognition, abbreviations, indented blocks, the `p /path` idiom, and agreement with the reference syntax. |
-| `TuwuliDictionaryTest` | A real 1925-entry field dictionary: patch, save, reload, roll back. |
+| Module | Suite | What it checks |
+|---|---|---|
+| core | `EngineTest` | Scripts built with `LiftPatch` and run by `LiftPatchEngine`: each verb, labels, blocks, directives, static and dynamic errors, rollback, plan mode. |
+| language | `ConformanceCorpusTest` | The cases of Appendix D, run exactly as D.1 defines the comparison. |
+| language | `SpecificationExamplesTest` | Every fenced `LiftPatchRef` and `LiftPatchShort` example of `specification.md` parses and is statically valid. |
+| language | `ComponentCommandsTest`, `PropertyCommandsTest` | The eight verbs, grouped by verb. |
+| language | `SelectionTest` | The seven selection strategies, the two axes, the pseudo-properties, multiplicity, references. |
+| language | `ConstructsTest` | Blocks, labels, language scoping, embedded initializers, atomicity, plan mode. |
+| language | `ConciseSyntaxTest` | Line recognition, abbreviations, indented blocks, the `p /path` idiom, and agreement with the reference syntax. |
+| language | `TuwuliDictionaryTest` | A real 1925-entry field dictionary: patch, save, reload, roll back. |
+
+The fixtures — the standard dictionary of Appendix D.2 and the Tuwuli field
+dictionary — live with the core's tests, and reach the language's tests through
+the core's test jar.
 
 ## The metamodel and the dictionary model
 
 Every component type, every property and every parentage the metamodel of
-Appendix A declares has a home in the `lift-api` object model this library
+Appendix A declares has a home in the `lift-api` object model the core
 writes through, so no script is ever refused for want of somewhere to put its
 result. Two declarations of the metamodel exist to keep that true, and both are
 part of the language rather than workarounds:
@@ -239,8 +274,9 @@ part of the language rather than workarounds:
 
 ## DSL language reference
 
-`specification.md` is the single source of truth: the data model and semantics
-(Part 1), the reference syntax (Part 2), the concise syntax (Part 3), the
+`specification.md`, at the root of the repository, is the single source of
+truth for both libraries: the data model and semantics (Part 1), the reference
+syntax (Part 2), the concise syntax (Part 3), the
 normative metamodel (Appendix A), the error codes (Appendix B), the grammars
 (Appendix C) and the conformance corpus (Appendix D).
 
