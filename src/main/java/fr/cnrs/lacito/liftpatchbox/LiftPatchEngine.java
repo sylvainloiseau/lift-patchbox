@@ -2,6 +2,7 @@ package fr.cnrs.lacito.liftpatchbox;
 
 import fr.cnrs.lacito.liftapi.LiftDictionary;
 import fr.cnrs.lacito.liftpatchbox.ast.Script;
+import fr.cnrs.lacito.liftpatchbox.engine.CommandRenderer;
 import fr.cnrs.lacito.liftpatchbox.engine.Executor;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCollector;
@@ -46,6 +47,7 @@ public final class LiftPatchEngine {
     private final Metamodel metamodel;
     private String defaultObjectLanguage;
     private String defaultMetaLanguage;
+    private CommandRenderer renderer = CommandRenderer.REFERENCE_NOTATION;
 
     /**
      * An engine validating against the standard metamodel of Appendix A.
@@ -88,6 +90,17 @@ public final class LiftPatchEngine {
      */
     public LiftPatchEngine withDefaultMetaLanguage(String language) {
         this.defaultMetaLanguage = language;
+        return this;
+    }
+
+    /**
+     * Set how commands are written in plan documents and in error messages.
+     *
+     * @param renderer the renderer; {@link CommandRenderer#REFERENCE_NOTATION} by default
+     * @return this instance
+     */
+    public LiftPatchEngine withRenderer(CommandRenderer renderer) {
+        this.renderer = renderer;
         return this;
     }
 
@@ -158,6 +171,7 @@ public final class LiftPatchEngine {
         Journal journal = new Journal();
         LiftModel model = new LiftModel(dictionary, metamodel, journal);
         Executor executor = new Executor(model, metamodel, journal);
+        executor.setRenderer(renderer);
         if (defaultObjectLanguage != null
             && model.hasLanguage(LanguageKind.OBJECT, defaultObjectLanguage)) {
             executor.bindDefaultLanguage(LanguageKind.OBJECT, defaultObjectLanguage);

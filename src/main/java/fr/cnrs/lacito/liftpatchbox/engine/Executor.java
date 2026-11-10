@@ -73,6 +73,7 @@ public final class Executor {
     private final Map<String, DeletedTarget> deleted = new LinkedHashMap<>();
 
     private int operationIndex;
+    private CommandRenderer renderer = CommandRenderer.REFERENCE_NOTATION;
 
     /**
      * An executor over one dictionary.
@@ -103,6 +104,23 @@ public final class Executor {
      */
     public void bindDefaultLanguage(LanguageKind kind, String language) {
         languages.bind(kind, language);
+    }
+
+    /**
+     * Set how commands are written in the plan and in error messages.
+     *
+     * @param renderer the renderer
+     */
+    public void setRenderer(CommandRenderer renderer) {
+        this.renderer = renderer;
+    }
+
+    /**
+     * The text of a command for its plan operation: the text it was parsed from,
+     * or, for a command built in Java, its rendering.
+     */
+    private String text(Command command) {
+        return command.sourceText() != null ? command.sourceText() : renderer.render(command);
     }
 
     /** A component a {@code delete} removed, remembered so that plan mode can report dangling references. */
@@ -191,7 +209,7 @@ public final class Executor {
                         resolver.bindLabel(selector.label(), resolved);
                     }
                     operations.add(new Operation(index, selector.position(),
-                        selector.chain().toString(), "select", null,
+                        renderer.render(selector.chain()), "select", null,
                         targetInfo(resolved, selector.label()),
                         targetInfo(model.parentOf(resolved), null),
                         List.of(), null, null));
@@ -232,7 +250,7 @@ public final class Executor {
             case Directive.DefinitionDelete d -> definitionDelete(d);
         };
         summary.count(effect);
-        operations.add(new Operation(index, directive.position(), directive.toString(),
+        operations.add(new Operation(index, directive.position(), renderer.render(directive),
             directive.keyword(), null, null, null, List.of(effect), null, null));
     }
 
@@ -458,7 +476,7 @@ public final class Executor {
             resolver.bindLabel(command.label(), created);
         }
         effects.forEach(summary::count);
-        operations.add(new Operation(index, command.position(), command.sourceText(),
+        operations.add(new Operation(index, command.position(), text(command),
             "create", null, targetInfo(created, command.label()), targetInfo(parent, null),
             effects, null, null));
         return created;
@@ -597,7 +615,7 @@ public final class Executor {
             resolver.bindLabel(command.label(), component);
         }
         effects.forEach(summary::count);
-        operations.add(new Operation(index, command.position(), command.sourceText(),
+        operations.add(new Operation(index, command.position(), text(command),
             "upsert", null, targetInfo(component, command.label()), targetInfo(parent, null),
             effects, null, null));
         return component;
@@ -698,7 +716,7 @@ public final class Executor {
         if (command.label() != null) {
             resolver.bindLabel(command.label(), component);
         }
-        operations.add(new Operation(index, command.position(), command.sourceText(),
+        operations.add(new Operation(index, command.position(), text(command),
             "ensure", null, targetInfo(component, command.label()),
             targetInfo(model.parentOf(component), null), List.of(), null, null));
         return component;
@@ -741,7 +759,7 @@ public final class Executor {
                 effects.add(effect);
             }
         }
-        operations.add(new Operation(index, command.position(), command.sourceText(),
+        operations.add(new Operation(index, command.position(), text(command),
             "delete", marked ? command.target().multiplicity().spelling() : null,
             marked || targets.isEmpty() ? null : targetInfo(targets.get(0), null),
             null, marked ? null : effects, applications, null));
@@ -822,7 +840,7 @@ public final class Executor {
         Effect effect = Effect.moved(type, from, model.positionOf(target).orElse(to),
             path(sourceParent), path(destination));
         summary.count(effect);
-        operations.add(new Operation(index, command.position(), command.sourceText(),
+        operations.add(new Operation(index, command.position(), text(command),
             "move", null, targetInfo(target, null), targetInfo(destination, null),
             List.of(effect), null, null));
         return target;
@@ -882,7 +900,7 @@ public final class Executor {
                 effects.addAll(local);
             }
         }
-        operations.add(new Operation(index, command.position(), command.sourceText(),
+        operations.add(new Operation(index, command.position(), text(command),
             verb.keyword(), marked ? target.head().multiplicity().spelling() : null,
             marked || components.isEmpty() ? null : targetInfo(components.get(0), null),
             null, marked ? null : effects, applications, null));
@@ -1062,7 +1080,7 @@ public final class Executor {
         }
         if (unique && found.size() > 1) {
             throw resolver.error(ModelErrorCode.AMBIGUOUS_REFERENCE,
-                found.size() + " components match `" + target + "`", target.position());
+                found.size() + " components match `" + renderer.render(target) + "`", target.position());
         }
         return found;
     }
@@ -1087,7 +1105,7 @@ public final class Executor {
             }
         }
         return resolver.error(ModelErrorCode.NOT_FOUND,
-            "no component matches `" + target + "`", target.position());
+            "no component matches `" + renderer.render(target) + "`", target.position());
     }
 
     /**
