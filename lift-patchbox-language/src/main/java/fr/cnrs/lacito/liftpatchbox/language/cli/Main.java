@@ -25,13 +25,13 @@ import picocli.CommandLine.Parameters;
  *
  * <pre>{@code
  * # patch an existing dictionary
- * java -jar lift-patchbox.jar edits.liftpatchs tww.lift tww-patched.lift --syntax concise
+ * java -jar lift-patchbox.jar edits.liftpatchshort tww.lift tww-patched.lift --syntax concise
  *
  * # start from an empty dictionary
- * java -jar lift-patchbox.jar edits.liftpatch new.lift
+ * java -jar lift-patchbox.jar edits.liftpatchref new.lift
  *
  * # see what a script would do, and change nothing
- * java -jar lift-patchbox.jar edits.liftpatch tww.lift out.lift --plan
+ * java -jar lift-patchbox.jar edits.liftpatchref tww.lift out.lift --plan
  * }</pre>
  *
  * <p>The tool always validates before it writes, and never writes a partially
@@ -48,7 +48,7 @@ import picocli.CommandLine.Parameters;
         "",
         "The surface syntax is taken from the script's %%liftpatch pragma when it",
         "declares one, then from --syntax, then from the file extension",
-        "(.liftpatch for the reference syntax, .liftpatchs for the concise one)."
+        "(.liftpatchref for the reference syntax, .liftpatchshort for the concise one)."
     }
 )
 public final class Main implements Callable<Integer> {

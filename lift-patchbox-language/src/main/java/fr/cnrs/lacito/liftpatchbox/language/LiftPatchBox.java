@@ -24,9 +24,9 @@ import java.nio.file.Path;
  *     .withDefaultObjectLanguage("tww")
  *     .withDefaultMetaLanguage("en");
  *
- * Plan plan = box.plan(dictionary, script, Syntax.CONCISE, "edits.liftpatchs");
+ * Plan plan = box.plan(dictionary, script, Syntax.CONCISE, "edits.liftpatchshort");
  * if (plan.isOk()) {
- *     box.apply(dictionary, script, Syntax.CONCISE, "edits.liftpatchs");
+ *     box.apply(dictionary, script, Syntax.CONCISE, "edits.liftpatchshort");
  * }
  * }</pre>
  *

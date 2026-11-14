@@ -109,24 +109,24 @@ mvn package
 ```bash
 # patch an existing dictionary
 java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
-  edits.liftpatchs tww.lift tww-patched.lift --syntax concise
+  edits.liftpatchshort tww.lift tww-patched.lift --syntax concise
 
 # start from an empty dictionary: only the output path is given
 java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
-  edits.liftpatch new.lift
+  edits.liftpatchref new.lift
 
 # see what a script would do, and change nothing
 java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
-  edits.liftpatch tww.lift out.lift --plan
+  edits.liftpatchref tww.lift out.lift --plan
 
 # emit the plan document of section 12.4.1 as JSON
 java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
-  edits.liftpatch tww.lift out.lift --plan --json
+  edits.liftpatchref tww.lift out.lift --plan --json
 ```
 
 The surface syntax is decided in this order: the script's `%liftpatch` pragma
 when it declares `syntax=`, then `--syntax`, then the file extension —
-`.liftpatch` for the reference syntax and `.liftpatchs` for the concise one.
+`.liftpatchref` for the reference syntax and `.liftpatchshort` for the concise one.
 Getting it wrong is otherwise silent, which is why a document in which not one
 line was recognized as a command is reported with a `NO_COMMAND_RECOGNIZED`
 warning.
@@ -157,9 +157,9 @@ LiftPatchBox box = new LiftPatchBox()
     .withDefaultObjectLanguage("tww")
     .withDefaultMetaLanguage("en");
 
-Plan plan = box.plan(dictionary, script, Syntax.CONCISE, "edits.liftpatchs");
+Plan plan = box.plan(dictionary, script, Syntax.CONCISE, "edits.liftpatchshort");
 if (plan.isOk()) {
-    box.apply(dictionary, script, Syntax.CONCISE, "edits.liftpatchs");
+    box.apply(dictionary, script, Syntax.CONCISE, "edits.liftpatchshort");
     dictionary.save(new File("tww-patched.lift"));
 }
 ```

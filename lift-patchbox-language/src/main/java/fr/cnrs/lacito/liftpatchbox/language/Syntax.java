@@ -12,10 +12,10 @@ package fr.cnrs.lacito.liftpatchbox.language;
 public enum Syntax {
 
     /** The verbose, explicit reference syntax of Part 2. */
-    REFERENCE("LiftPatchRef", "liftpatch"),
+    REFERENCE("LiftPatchRef", "liftpatchref"),
 
     /** The concise, line-oriented syntax of Part 3. */
-    CONCISE("LiftPatchShort", "liftpatchs");
+    CONCISE("LiftPatchShort", "liftpatchshort");
 
     private final String pragmaName;
     private final String fileExtension;
@@ -38,7 +38,7 @@ public enum Syntax {
     /**
      * The file extension this specification recommends for this syntax.
      *
-     * @return {@code "liftpatch"} or {@code "liftpatchs"}, without the dot
+     * @return {@code "liftpatchref"} or {@code "liftpatchshort"}, without the dot
      */
     public String fileExtension() {
         return fileExtension;
@@ -63,15 +63,15 @@ public enum Syntax {
      * Guess the syntax from a file name, using the recommended extensions.
      *
      * @param fileName the file name
-     * @return {@link #CONCISE} for a {@code .liftpatchs} file, {@link #REFERENCE}
-     *         for a {@code .liftpatch} file, {@code null} for anything else
+     * @return {@link #CONCISE} for a {@code .liftpatchshort} file, {@link #REFERENCE}
+     *         for a {@code .liftpatchref} file, {@code null} for anything else
      */
     public static Syntax fromFileName(String fileName) {
         String lower = fileName.toLowerCase(java.util.Locale.ROOT);
-        if (lower.endsWith(".liftpatchs")) {
+        if (lower.endsWith(".liftpatchshort")) {
             return CONCISE;
         }
-        if (lower.endsWith(".liftpatch")) {
+        if (lower.endsWith(".liftpatchref")) {
             return REFERENCE;
         }
         return null;

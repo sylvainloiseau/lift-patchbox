@@ -1,6 +1,6 @@
 ---
 Author: Sylvain Loiseau
-Last edit: 2026/10/31
+Last edit: 2026/11/14
 Version: 1.1
 Title: "LiftPatch: a mutation language for the LIFT data model"
 ---
@@ -71,7 +71,7 @@ token — and is therefore read as pure prose, applying nothing and reporting
 nothing. Two further rules close that hole:
 
 - plan mode MUST report a warning for a document in which no line at all was recognized as a command (section "12.4");
-- implementations SHOULD use the extension `.liftpatch` for a LiftPatchRef script and `.liftpatchs` for a LiftPatchShort document.
+- implementations SHOULD use the extension `.liftpatchref` for a LiftPatchRef script and `.liftpatchshort` for a LiftPatchShort document.
 
 ### 1.2 The two surface syntaxes
 
@@ -3215,7 +3215,7 @@ order is significant).
 ```json
 {
   "liftpatchPlan": "1.0",
-  "script": { "source": "edits.liftpatch", "syntax": "LiftPatchRef", "commands": 3 },
+  "script": { "source": "edits.liftpatchref", "syntax": "LiftPatchRef", "commands": 3 },
   "metamodel": { "version": "1.0", "metamodelId": null },
   "status": "ok",
   "staticErrors": [],

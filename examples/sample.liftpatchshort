@@ -1,0 +1,69 @@
+# A sample LiftPatchShort script: the same dictionary as sample.liftpatchref.
+#
+# It builds a small dictionary from scratch, then revises it with update,
+# upsert, delete, set, clear, ensure and move. The words and glosses are
+# illustrative. Run it on an empty dictionary (object language "tww", meta
+# language "en"):
+#
+#   java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
+#     examples/sample.liftpatchshort new.lift
+
+language-create meta = "fr"
+language-default meta = "en"
+
+# ---- 1. Creation ---------------------------------------------------------
+
+c e("mami")
+  c s("pig", g@fr = "cochon")
+    s (d = "A domestic pig")
+    c x("a mami jefi")
+      c o("free", "I shot a pig")
+  c n("general", "Recorded at Yakoro, 2025")
+s /mami/pig/c (v = "Noun")
+
+c e("efe")
+  c s("door")
+    c x("efe ka", o("free", "the door is open"))
+    c x("draft: efe kaka")
+  c p(r = "ɛfɛ")
+s /efe/door/c (v = "Noun")
+
+c e("jefi", s("shoot"), s("hit"), t("cv-pattern", "CVCV"))
+s /jefi/shoot/c (v = "Verb")
+s /jefi/hit/c (v = "Verb")
+
+c e("kamu", s("house"), s("hut"))
+c /tutu
+
+# ---- 2. Revision ---------------------------------------------------------
+
+# update: the target value must already exist
+u /mami/pig (d = "A domestic pig, raised in the village", g@fr = "porc")
+u /mami/n^general (t = "Recorded at Yakoro, March 2025")
+
+# upsert, select branch: the sense exists, so only the definition is set
+p /efe s("door", d = "A wooden door of a house")
+# upsert, create branch: no "boar" sense yet under "mami"
+p /mami s("boar", d = "A wild pig")
+# the p /form/gloss idiom: no "nuku" meaning "water" exists, so it is created
+p /nuku/water
+# running it again, one step deeper, selects what the previous line created
+p /nuku/water/"nuku ka"
+
+# ensure: a precondition, naming its subject with a label
+e /jefi shoot as $shoot
+s $shoot (d = "To shoot with a bow or a gun")
+s /jefi/hit (d = "To hit with a stick")
+
+# delete
+d* /efe/door x[t ~ "^draft"]
+d /kamu hut
+d /jefi t^cv-pattern
+d /tutu
+
+# clear, and a last set
+l /mami/pig (g@fr)
+s /kamu/house/c (v = "Noun")
+
+# move: put the "hit" sense of "jefi" first
+m /jefi hit at beginning

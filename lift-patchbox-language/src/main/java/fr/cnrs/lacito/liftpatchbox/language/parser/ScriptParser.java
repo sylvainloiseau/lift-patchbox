@@ -25,8 +25,8 @@ import org.antlr.v4.runtime.CommonTokenStream;
  * <p>It dispatches on the surface syntax and applies the version pragma rules of
  * Part 1, section 1.1. The syntax is decided in this order: the {@code syntax=}
  * pragma attribute, when the script declares one; otherwise the syntax the caller
- * asked for; otherwise the file extension, {@code .liftpatch} for the reference
- * syntax and {@code .liftpatchs} for the concise one.</p>
+ * asked for; otherwise the file extension, {@code .liftpatchref} for the reference
+ * syntax and {@code .liftpatchshort} for the concise one.</p>
  *
  * <p>Reading a script with the wrong syntax is silent rather than loud — a
  * reference script read as a concise document matches no command line and applies
@@ -78,7 +78,7 @@ public final class ScriptParser {
             throw new LiftPatchException(LiftPatchError.of(
                 ModelErrorCode.SYNTAX_ERROR,
                 "the surface syntax of " + source + " is not declared by a pragma and was not "
-                    + "given; pass --syntax, use a .liftpatch or .liftpatchs extension, or write "
+                    + "given; pass --syntax, use a .liftpatchref or .liftpatchshort extension, or write "
                     + "%liftpatch 1.1 syntax=\"LiftPatchRef\"",
                 SourcePosition.UNKNOWN));
         }

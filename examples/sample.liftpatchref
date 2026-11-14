@@ -1,0 +1,102 @@
+# A sample LiftPatchRef script.
+#
+# It builds a small dictionary from scratch, then revises it with update,
+# upsert, delete, set, clear, ensure and move. The words and glosses are
+# illustrative. Run it on an empty dictionary (object language "tww", meta
+# language "en"):
+#
+#   java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
+#     examples/sample.liftpatchref new.lift
+
+language-create meta = "fr"
+
+with object = "tww", meta = "en" {
+
+  # ---- 1. Creation -------------------------------------------------------
+
+  create entry(form = "mami") {
+    create sense(gloss = "pig", gloss@fr = "cochon") {
+      set definition = "A domestic pig"
+      set value = "Noun" on category
+      create example(text = "a mami jefi") {
+        create translation(type = "free", text = "I shot a pig")
+      }
+    }
+    create note(type = "general", text = "Recorded at Yakoro, 2025")
+  }
+
+  create entry(form = "efe") {
+    create sense(gloss = "door") {
+      set value = "Noun" on category
+      create example(text = "efe ka") {
+        create translation(type = "free", text = "the door is open")
+      }
+      create example(text = "draft: efe kaka")
+    }
+    create pronunciation(transcription = "ɛfɛ")
+  }
+
+  create entry(form = "jefi") {
+    create sense(gloss = "shoot") {
+      set value = "Verb" on category
+    }
+    create sense(gloss = "hit") {
+      set value = "Verb" on category
+    }
+    create trait(type = "cv-pattern", value = "CVCV")
+  }
+
+  create entry(form = "kamu") {
+    create sense(gloss = "house")
+    create sense(gloss = "hut")
+  }
+
+  create entry(form = "tutu")
+
+  # ---- 2. Revision -------------------------------------------------------
+
+  # update: the target value must already exist
+  update definition = "A domestic pig, raised in the village"
+    on sense[gloss = "pig"] of entry[form = "mami"]
+  update gloss@fr = "porc"
+    on sense[gloss = "pig"] of entry[form = "mami"]
+  update text = "Recorded at Yakoro, March 2025"
+    on note[type = "general"] of entry[form = "mami"]
+
+  # upsert, select branch: the sense exists, so only the definition is set
+  upsert sense(gloss = "door", definition = "A wooden door of a house")
+    under entry[form = "efe"]
+  # upsert, create branch: no "boar" sense yet under "mami"
+  upsert sense(gloss = "boar", definition = "A wild pig")
+    under entry[form = "mami"]
+  # upsert an entry: no "nuku" meaning "water" exists, so it is created
+  upsert entry(form = "nuku", has-gloss = "water") {
+    upsert sense(gloss = "water")
+  }
+  # running the same upsert again selects what the previous one created
+  upsert entry(form = "nuku", has-gloss = "water") {
+    upsert sense(gloss = "water") {
+      upsert example(text = "nuku ka")
+    }
+  }
+
+  # ensure: a precondition, naming its subject with a label
+  ensure entry[form = "jefi", has-gloss = "shoot"] as $jefi
+  ensure sense[gloss = "shoot"] under $jefi as $shoot
+  set definition = "To shoot with a bow or a gun" on $shoot
+  set definition = "To hit with a stick" on sense[gloss = "hit"] of $jefi
+
+  # delete
+  delete all example[text ~ "^draft"]
+    under sense[gloss = "door"] of entry[form = "efe"]
+  delete sense[gloss = "hut"] under entry[form = "kamu"]
+  delete trait[type = "cv-pattern"] under entry[form = "jefi"]
+  delete entry[form = "tutu"]
+
+  # clear, and a last set
+  clear gloss@fr on sense[gloss = "pig"] of entry[form = "mami"]
+  set value = "Noun" on category of sense[gloss = "house"] of entry[form = "kamu"]
+}
+
+# move: put the "hit" sense of "jefi" first
+move sense[gloss@en = "hit"] under entry[form@tww = "jefi"] at beginning
