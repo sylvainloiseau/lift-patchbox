@@ -13,6 +13,7 @@ import fr.cnrs.lacito.liftapi.model.FeatureSet;
 import fr.cnrs.lacito.liftapi.model.Form;
 import fr.cnrs.lacito.liftapi.model.HasRefId;
 import fr.cnrs.lacito.liftapi.model.GrammaticalInfo;
+import fr.cnrs.lacito.liftapi.model.HasGrammaticalInfo;
 import fr.cnrs.lacito.liftapi.model.LiftAnnotation;
 import fr.cnrs.lacito.liftapi.model.LiftEntry;
 import fr.cnrs.lacito.liftapi.model.LiftEtymology;
@@ -1135,19 +1136,24 @@ public final class LiftModel {
         setter.accept(fresh);
     }
 
-    private void setCategoryValue(LiftSense sense, String value) {
-        Optional<GrammaticalInfo> old = sense.getGrammaticalInfo();
+    /**
+     * Write the part of speech of a component that carries a grammatical
+     * information: a sense, which is the host of the {@code category} singleton, or
+     * a reversal, since lift-api 0.1.1 gives a reversal one too.
+     */
+    private void setCategoryValue(HasGrammaticalInfo host, String value) {
+        Optional<GrammaticalInfo> old = host.getGrammaticalInfo();
         if (value == null) {
             if (old.isPresent()) {
-                sense.deleteGrammaticalInfo();
+                host.deleteGrammaticalInfo();
             }
             return;
         }
         Feature feature = featureFor(header().getGrammaticalInfoManager(), value);
         if (old.isPresent()) {
-            sense.deleteGrammaticalInfo();
+            host.deleteGrammaticalInfo();
         }
-        sense.setGrammaticalInfo(feature);
+        host.setGrammaticalInfo(feature);
     }
 
     /**

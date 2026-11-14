@@ -48,7 +48,7 @@
   <properties>
     <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
     <maven.compiler.release>25</maven.compiler.release>
-    <lift-api.version>0.1.0</lift-api.version>
+    <lift-api.version>0.1.1</lift-api.version>
     <antlr.version>4.13.1</antlr.version>
     <picocli.version>4.7.6</picocli.version>
     <junit.version>6.1.0</junit.version>
