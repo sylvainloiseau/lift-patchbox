@@ -122,6 +122,10 @@ java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-
 # emit the plan document of section 12.4.1 as JSON
 java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
   edits.liftpatchref tww.lift out.lift --plan --json
+
+# list every syntax and static error of a script; no dictionary is needed
+java -jar lift-patchbox-language/target/lift-patchbox-language-0.1-SNAPSHOT-jar-with-dependencies.jar \
+  edits.liftpatchref --check
 ```
 
 The surface syntax is decided in this order: the script's `%liftpatch` pragma
@@ -135,6 +139,7 @@ Other options:
 
 | Option | What it does |
 |---|---|
+| `--check`, `-c` | Report every syntax error and every static error of the script, and change nothing. No dictionary is read. |
 | `--plan`, `-p` | Report what the script would do and change nothing. |
 | `--json` | Print the plan document as JSON rather than as prose. |
 | `--object-language`, `--meta-language` | Set the default languages, overriding the dictionary's first ones. |

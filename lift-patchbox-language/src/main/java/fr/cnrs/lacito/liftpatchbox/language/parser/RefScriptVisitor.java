@@ -38,6 +38,8 @@ import java.util.logging.Logger;
 import org.antlr.v4.runtime.ParserRuleContext;
 import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.misc.Interval;
+import org.antlr.v4.runtime.tree.ErrorNode;
+import org.antlr.v4.runtime.tree.ParseTree;
 import org.antlr.v4.runtime.tree.TerminalNode;
 
 /**
@@ -68,6 +70,9 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
         this.source = source;
     }
 
+    /** Where errors are recorded while building, or {@code null} to throw at the first. */
+    private List<LiftPatchError> errors;
+
     // ===================================================================
     // Script
     // ===================================================================
@@ -79,10 +84,12 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
      * @return the script, with its pragma
      */
     public SourceScript buildScript(LiftPatchRefParser.ScriptContext ctx) {
-        Pragma pragma = ctx.pragma() == null ? null : visitPragma(ctx.pragma());
+        Pragma pragma = ctx.pragma() == null || hasOwnSyntaxError(ctx.pragma())
+            ? null
+            : visitPragma(ctx.pragma());
         List<Item> items = new ArrayList<>();
         for (LiftPatchRefParser.ItemContext ic : ctx.item()) {
-            items.add(visitItem(ic));
+            addItem(items, ic);
         }
         LOGGER.log(Level.FINE, () ->
             "Parsed " + items.size() + " top-level item(s) from " + source);
@@ -90,7 +97,70 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             .syntaxName(Syntax.REFERENCE.pragmaName())
             .source(source);
         items.forEach(builder::add);
-        return new SourceScript(builder.build(), pragma, Syntax.REFERENCE, items.size());
+        return new SourceScript(builder.build(), pragma, Syntax.REFERENCE, ctx.item().size());
+    }
+
+    /**
+     * Build a script from a parse tree that may hold syntax errors, recording every
+     * error rather than stopping at the first.
+     *
+     * <p>The unit of recovery is the item: a command, a directive or a block. An
+     * item whose own text ANTLR had to repair is left out, its syntax error having
+     * already been reported by the parser; an item the grammar accepts but that
+     * breaks a rule the grammar cannot express is recorded and left out too. The
+     * items of a block are judged one by one, so that a bad line in a block leaves
+     * the rest of the block in place, as in the concise syntax.</p>
+     *
+     * @param ctx    the {@code script} parse tree
+     * @param errors where the errors are recorded
+     * @return the script built from the items that could be built
+     */
+    public SourceScript buildScript(LiftPatchRefParser.ScriptContext ctx, List<LiftPatchError> errors) {
+        this.errors = errors;
+        try {
+            return buildScript(ctx);
+        } finally {
+            this.errors = null;
+        }
+    }
+
+    /** Build one item into {@code items}, or record why it cannot be built. */
+    private void addItem(List<Item> items, LiftPatchRefParser.ItemContext ic) {
+        if (errors == null) {
+            items.add(visitItem(ic));
+            return;
+        }
+        if (hasOwnSyntaxError(ic)) {
+            return;
+        }
+        try {
+            items.add(visitItem(ic));
+        } catch (LiftPatchException e) {
+            errors.addAll(e.errors());
+        }
+    }
+
+    /**
+     * Whether ANTLR repaired the text of this rule, not counting the nested items
+     * of a block, which are judged on their own.
+     */
+    private static boolean hasOwnSyntaxError(ParserRuleContext ctx) {
+        if (ctx.exception != null) {
+            return true;
+        }
+        for (int i = 0; i < ctx.getChildCount(); i++) {
+            ParseTree child = ctx.getChild(i);
+            if (child instanceof ErrorNode) {
+                return true;
+            }
+            if (child instanceof LiftPatchRefParser.ItemContext) {
+                continue;
+            }
+            if (child instanceof ParserRuleContext rule && hasOwnSyntaxError(rule)) {
+                return true;
+            }
+        }
+        return false;
     }
 
     @Override
@@ -146,7 +216,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
         BlockHeader header = buildHeader(ctx.blockHeader());
         List<Item> body = new ArrayList<>();
         for (LiftPatchRefParser.ItemContext ic : ctx.item()) {
-            body.add(visitItem(ic));
+            addItem(body, ic);
         }
         return new Block(header, body, position(ctx));
     }

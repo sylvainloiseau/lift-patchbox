@@ -2,11 +2,14 @@ package fr.cnrs.lacito.liftpatchbox.language.cli;
 
 import fr.cnrs.lacito.liftapi.LiftDictionary;
 import fr.cnrs.lacito.liftpatchbox.language.LiftPatchBox;
+import fr.cnrs.lacito.liftpatchbox.language.ScriptCheck;
 import fr.cnrs.lacito.liftpatchbox.language.SourceScript;
 import fr.cnrs.lacito.liftpatchbox.language.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
+import fr.cnrs.lacito.liftpatchbox.error.ErrorCollector;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
+import fr.cnrs.lacito.liftpatchbox.error.LiftPatchWarning;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
 import java.io.File;
 import java.nio.charset.StandardCharsets;
@@ -17,8 +20,11 @@ import java.util.logging.Level;
 import java.util.logging.Logger;
 import picocli.CommandLine;
 import picocli.CommandLine.Command;
+import picocli.CommandLine.Model.CommandSpec;
 import picocli.CommandLine.Option;
+import picocli.CommandLine.ParameterException;
 import picocli.CommandLine.Parameters;
+import picocli.CommandLine.Spec;
 
 /**
  * The command-line tool: patch a LIFT dictionary with a LiftPatch script.
@@ -32,6 +38,9 @@ import picocli.CommandLine.Parameters;
  *
  * # see what a script would do, and change nothing
  * java -jar lift-patchbox.jar edits.liftpatchref tww.lift out.lift --plan
+ *
+ * # list every syntax and static error of a script; no dictionary is needed
+ * java -jar lift-patchbox.jar edits.liftpatchref --check
  * }</pre>
  *
  * <p>The tool always validates before it writes, and never writes a partially
@@ -70,20 +79,31 @@ public final class Main implements Callable<Integer> {
 
     @Parameters(
         index = "1..*",
-        arity = "1..2",
+        arity = "0..2",
         paramLabel = "<lift-file>",
         description = {
             "Either <input-lift-file> <output-lift-file>, which patches an",
             "existing dictionary, or <output-lift-file> alone, which patches",
-            "a new empty one."
+            "a new empty one. Not needed with --check."
         })
     private Path[] dictionaries;
+
+    @Spec
+    private CommandSpec spec;
 
     @Option(
         names = {"-s", "--syntax"},
         paramLabel = "<syntax>",
         description = "The surface syntax of the script: ${COMPLETION-CANDIDATES}.")
     private SyntaxOption syntax;
+
+    @Option(
+        names = {"-c", "--check"},
+        description = {
+            "Report every syntax error and every static error of the script, and",
+            "change nothing. No dictionary is read."
+        })
+    private boolean checkOnly;
 
     @Option(
         names = {"-p", "--plan"},
@@ -160,6 +180,13 @@ public final class Main implements Callable<Integer> {
         Logging.configure(
             verbose ? Level.FINE : quiet ? Level.WARNING : Level.INFO, System.err);
 
+        if (checkOnly) {
+            return check();
+        }
+        if (dictionaries == null || dictionaries.length == 0) {
+            throw new ParameterException(spec.commandLine(),
+                "Missing required parameter: '<lift-file>' (only --check runs without one)");
+        }
         Path input = dictionaries.length == 2 ? dictionaries[0] : null;
         Path output = dictionaries[dictionaries.length - 1];
 
@@ -202,6 +229,44 @@ public final class Main implements Callable<Integer> {
             System.err.println("error: " + e.getMessage());
             return EXIT_IO_ERROR;
         }
+    }
+
+    /**
+     * List every syntax error and every static error of the script, sorted by
+     * position, then the warnings.
+     */
+    private int check() {
+        // The validator logs each error as it records it; a check reports the
+        // errors itself, after the rules for a partly parsed script have been
+        // applied, so that logging is silenced for the duration of the check.
+        Logger collectorLogger = Logger.getLogger(ErrorCollector.class.getName());
+        Level saved = collectorLogger.getLevel();
+        ScriptCheck result;
+        try {
+            LiftPatchBox box = new LiftPatchBox(loadMetamodel())
+                .withDefaultObjectLanguage(objectLanguage)
+                .withDefaultMetaLanguage(metaLanguage);
+            collectorLogger.setLevel(Level.OFF);
+            result = box.checkFile(commands, syntax == null ? null : syntax.syntax());
+        } catch (Exception e) {
+            System.err.println("error: " + e.getMessage());
+            return EXIT_IO_ERROR;
+        } finally {
+            collectorLogger.setLevel(saved);
+        }
+        for (LiftPatchError error : result.errors()) {
+            LOGGER.log(Level.SEVERE, error::format);
+        }
+        for (LiftPatchWarning warning : result.warnings()) {
+            LOGGER.log(Level.WARNING, warning::format);
+        }
+        if (result.isOk()) {
+            System.out.println("No syntax or static error in " + commands.getFileName());
+            return EXIT_OK;
+        }
+        System.err.println(result.syntaxErrors().size() + " syntax error(s), "
+            + result.staticErrors().size() + " static error(s) in " + commands.getFileName());
+        return EXIT_SCRIPT_ERROR;
     }
 
     private Metamodel loadMetamodel() throws java.io.IOException {

@@ -113,16 +113,45 @@ public final class ShortScriptParser {
     // ===================================================================
 
     /**
+     * Stands, in the body of a block being built, for a command line that failed:
+     * it is left out of the script, and so is every line indented under it.
+     */
+    private static final Object FAILED = new Object();
+
+    /**
      * Parse a whole document.
      *
      * @param document the document text, commands and prose alike
      * @return the script, with its pragma
-     * @throws LiftPatchException with a static error code when a line that the
-     *         recognition rule accepts does not parse, or breaks one of the rules
-     *         the grammar cannot express
+     * @throws LiftPatchException with a static error code, carrying every error of
+     *         the document, when a line that the recognition rule accepts does not
+     *         parse, or breaks one of the rules the grammar cannot express
      */
     public SourceScript parse(String document) {
-        ShortLinePreprocessor.Scan scan = new ShortLinePreprocessor(source).scan(document);
+        List<LiftPatchError> errors = new ArrayList<>();
+        SourceScript script = parse(document, errors);
+        return new ParseOutcome(script, errors).orThrow();
+    }
+
+    /**
+     * Parse a whole document, recording every error rather than stopping at the
+     * first.
+     *
+     * <p>The unit of recovery is the command line, since each line is parsed on its
+     * own. A line that fails is recorded and left out of the script; the lines
+     * indented under it are still parsed, so that their own errors are reported, but
+     * are left out too, since their parent is unknown. The operation counter
+     * advances over a failed line as over a good one, so that the errors of later
+     * lines carry the index their command has.</p>
+     *
+     * @param document the document text, commands and prose alike
+     * @param errors   where the errors are recorded
+     * @return the script built from the lines that parsed, with its pragma
+     * @throws LiftPatchException for a fatal error only: a malformed sigil or
+     *         version pragma
+     */
+    public SourceScript parse(String document, List<LiftPatchError> errors) {
+        ShortLinePreprocessor.Scan scan = new ShortLinePreprocessor(source, errors).scan(document);
         operationCounter = 0;
 
         Pragma pragma = scan.pragmaLine() == null
@@ -135,6 +164,9 @@ public final class ShortScriptParser {
         Frame lastContainer = root;
         int lastIndent = -1;
         int lastGroup = -1;
+        // The indentation of the first line of the group, which is the top level of
+        // that group: a line returning to the top level must match it exactly.
+        int topIndent = 0;
 
         for (ShortLinePreprocessor.Recognized line : scan.lines()) {
             if (line.groupId() != lastGroup) {
@@ -146,24 +178,48 @@ public final class ShortScriptParser {
                 lastContainer = root;
                 lastIndent = -1;
                 lastGroup = line.groupId();
+                topIndent = line.indent();
             }
 
             Frame container;
+            boolean misaligned = false;
             if (canAnchor(lastEmitted) && line.indent() > lastIndent) {
                 container = openBlock(stack, lastContainer, lastEmitted, line.indent());
             } else {
                 while (!stack.isEmpty() && line.indent() < stack.get(stack.size() - 1).bodyIndent) {
                     stack.remove(stack.size() - 1);
                 }
-                if (!stack.isEmpty() && line.indent() != stack.get(stack.size() - 1).bodyIndent) {
-                    throw error(ModelErrorCode.SYNTAX_ERROR,
+                int level = stack.isEmpty() ? topIndent : stack.get(stack.size() - 1).bodyIndent;
+                // A line the scan failed has an indentation that means nothing (a
+                // tab in it), and its error is already recorded.
+                if (line.indent() != level && !scan.failedLines().contains(line.lineNumber())) {
+                    // Recorded, and the line is kept out of the script under the
+                    // nearest open level, since its parent is unknown.
+                    errors.add(new LiftPatchError(ModelErrorCode.SYNTAX_ERROR,
                         "this indentation matches no open block level", line.position(),
-                        operationCounter + 1);
+                        operationCounter + 1));
+                    misaligned = true;
                 }
                 container = stack.isEmpty() ? root : stack.get(stack.size() - 1);
             }
 
-            Object emitted = buildLine(line);
+            Object emitted;
+            if (scan.failedLines().contains(line.lineNumber())) {
+                // The scan has already recorded the error of this line.
+                emitted = FAILED;
+                operationCounter++;
+            } else {
+                try {
+                    emitted = buildLine(line);
+                } catch (LiftPatchException e) {
+                    errors.addAll(e.errors());
+                    emitted = FAILED;
+                    operationCounter++;
+                }
+                if (misaligned) {
+                    emitted = FAILED;
+                }
+            }
             container.body.add(emitted);
             lastEmitted = emitted;
             lastContainer = container;
@@ -172,7 +228,7 @@ public final class ShortScriptParser {
 
         List<Item> items = new ArrayList<>();
         for (Object o : root.body) {
-            items.add(toItem(o));
+            addItem(items, o);
         }
         return new SourceScript(new Script(items, source, Syntax.CONCISE.pragmaName()),
             pragma, Syntax.CONCISE, scan.commandCount());
@@ -185,7 +241,8 @@ public final class ShortScriptParser {
      * its own code rather than a parse failure.
      */
     private static boolean canAnchor(Object lastEmitted) {
-        return lastEmitted instanceof Command || lastEmitted instanceof Frame;
+        return lastEmitted instanceof Command || lastEmitted instanceof Frame
+            || lastEmitted == FAILED;
     }
 
     /**
@@ -194,7 +251,12 @@ public final class ShortScriptParser {
      */
     private Frame openBlock(List<Frame> stack, Frame container, Object anchor, int bodyIndent) {
         Frame frame;
-        if (anchor instanceof Frame existing) {
+        if (anchor == FAILED) {
+            // The lines indented under a failed line are parsed but not kept.
+            container.body.remove(container.body.size() - 1);
+            frame = Frame.failed(bodyIndent);
+            container.body.add(frame);
+        } else if (anchor instanceof Frame existing) {
             // The anchor is itself a block: the `p /path` idiom, whose children
             // belong to the innermost component it upserts.
             frame = innermost(existing);
@@ -218,27 +280,48 @@ public final class ShortScriptParser {
         return inner;
     }
 
-    private Item toItem(Object o) {
+    /** Add the item a line or a block stands for, unless it failed. */
+    private void addItem(List<Item> items, Object o) {
+        if (o == FAILED) {
+            return;
+        }
         if (o instanceof Frame f) {
+            if (f.failed) {
+                return;
+            }
             List<Item> body = new ArrayList<>();
             for (Object child : f.body) {
-                body.add(toItem(child));
+                addItem(body, child);
             }
-            return new Block(f.header, body, f.header.position());
+            items.add(new Block(f.header, body, f.header.position()));
+            return;
         }
-        return (Item) o;
+        items.add((Item) o);
     }
 
-    /** A block being built: its header, its body, and the indentation of its body. */
+    /**
+     * A block being built: its header, its body, and the indentation of its body.
+     * A failed frame stands for the lines indented under a failed line.
+     */
     private static final class Frame {
 
         private int bodyIndent;
         private final BlockHeader header;
+        private final boolean failed;
         private final List<Object> body = new ArrayList<>();
 
         Frame(int bodyIndent, BlockHeader header) {
+            this(bodyIndent, header, false);
+        }
+
+        private Frame(int bodyIndent, BlockHeader header, boolean failed) {
             this.bodyIndent = bodyIndent;
             this.header = header;
+            this.failed = failed;
+        }
+
+        static Frame failed(int bodyIndent) {
+            return new Frame(bodyIndent, null, true);
         }
     }
 
@@ -1191,9 +1274,17 @@ public final class ShortScriptParser {
     // ANTLR plumbing
     // ===================================================================
 
+    /**
+     * A parser for one fragment of a command line. Its lexer starts at the line and
+     * column the fragment has in the document, so that every token, and so every
+     * position the command model and the error messages carry, is in the
+     * coordinates of the document rather than of the fragment.
+     */
     private LiftPatchShortParser parserFor(String text, int line, int column) {
         LiftPatchShortLexer lexer = new LiftPatchShortLexer(CharStreams.fromString(text));
-        CollectingErrorListener listener = new CollectingErrorListener(line - 1, column - 1);
+        lexer.setLine(line);
+        lexer.setCharPositionInLine(column - 1);
+        CollectingErrorListener listener = new CollectingErrorListener();
         lexer.removeErrorListeners();
         lexer.addErrorListener(listener);
         LiftPatchShortParser parser = new LiftPatchShortParser(new CommonTokenStream(lexer));

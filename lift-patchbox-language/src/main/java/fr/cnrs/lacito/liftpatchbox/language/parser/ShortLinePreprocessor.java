@@ -6,7 +6,9 @@ import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.List;
+import java.util.Set;
 
 /**
  * Turns a mixed document into the sequence of its LiftPatchShort command lines.
@@ -43,13 +45,41 @@ public final class ShortLinePreprocessor {
 
     private final String source;
 
+    /** Where errors are recorded, or {@code null} to throw at the first one. */
+    private final List<LiftPatchError> errors;
+
+    /** The lines on which an error was recorded, and that cannot be built. */
+    private final Set<Integer> failedLines = new HashSet<>();
+
     /**
-     * A preprocessor for a document read from the named source.
+     * A preprocessor for a document read from the named source, throwing at the
+     * first error.
      *
      * @param source the source name, used in diagnostics
      */
     public ShortLinePreprocessor(String source) {
+        this(source, null);
+    }
+
+    /**
+     * A preprocessor recording its errors and going on to the end of the document.
+     * A malformed sigil is still thrown: it decides which lines are commands at all.
+     *
+     * @param source the source name, used in diagnostics
+     * @param errors where the errors are recorded, or {@code null} to throw at the
+     *               first one
+     */
+    public ShortLinePreprocessor(String source, List<LiftPatchError> errors) {
         this.source = source;
+        this.errors = errors;
+    }
+
+    /** Record an error, or throw it when no error list was given. */
+    private void report(LiftPatchException error) {
+        if (errors == null) {
+            throw error;
+        }
+        errors.addAll(error.errors());
     }
 
     /**
@@ -104,19 +134,26 @@ public final class ShortLinePreprocessor {
      * @param sigil          the declared sigil, or {@code null} when none was declared
      * @param pragmaLine     the recognized pragma line, or {@code null}
      * @param totalLines     how many physical lines the document has
+     * @param failedLines    the numbers of the recognized lines on which the scan
+     *                       recorded an error, and that cannot be built
      */
-    public record Scan(List<Recognized> lines, String sigil, Recognized pragmaLine, int totalLines) {
+    public record Scan(
+        List<Recognized> lines, String sigil, Recognized pragmaLine, int totalLines,
+        Set<Integer> failedLines
+    ) {
 
         /**
-         * Canonical constructor, taking an unmodifiable copy of the lines.
+         * Canonical constructor, taking unmodifiable copies.
          *
-         * @param lines      the recognized lines
-         * @param sigil      the declared sigil, or {@code null}
-         * @param pragmaLine the recognized pragma line, or {@code null}
-         * @param totalLines how many physical lines the document has
+         * @param lines       the recognized lines
+         * @param sigil       the declared sigil, or {@code null}
+         * @param pragmaLine  the recognized pragma line, or {@code null}
+         * @param totalLines  how many physical lines the document has
+         * @param failedLines the numbers of the lines that cannot be built
          */
         public Scan {
             lines = List.copyOf(lines);
+            failedLines = Set.copyOf(failedLines);
         }
 
         /**
@@ -135,9 +172,9 @@ public final class ShortLinePreprocessor {
      *
      * @param document the whole document text
      * @return the recognized lines, the sigil, and the pragma
-     * @throws LiftPatchException with {@link ModelErrorCode#SYNTAX_ERROR} when a command
-     *         line is indented with a tab, or when a pragma declaring a sigil is not
-     *         the first non-blank line
+     * @throws LiftPatchException with {@link ModelErrorCode#SYNTAX_ERROR} when the
+     *         sigil is malformed; and, when no error list was given, when a command
+     *         line is indented with a tab or a pragma follows the first command line
      */
     public Scan scan(String document) {
         String[] physical = document.split("\\R", -1);
@@ -186,7 +223,7 @@ public final class ShortLinePreprocessor {
             sawCommand = true;
             out.add(recognized);
         }
-        return new Scan(out, sigil, pragmaLine, physical.length);
+        return new Scan(out, sigil, pragmaLine, physical.length, failedLines);
     }
 
     /**
@@ -263,11 +300,15 @@ public final class ShortLinePreprocessor {
         int indent = 0;
         while (j < line.length() && (line.charAt(j) == ' ' || line.charAt(j) == '\t')) {
             if (line.charAt(j) == '\t') {
-                throw syntaxError(
+                // Recorded, and the line is not built: its parent would depend on
+                // the width of the tab. The tab is counted as one column so that the
+                // scan goes on.
+                failedLines.add(lineNumber);
+                report(syntaxError(
                     "a tab may not be used to indent a command line: the width of a tab is a "
                         + "property of the reader's editor, and the parent of an edit may not "
                         + "depend on it",
-                    new SourcePosition(lineNumber, j + 1));
+                    new SourcePosition(lineNumber, j + 1)));
             }
             indent++;
             j++;
@@ -279,8 +320,9 @@ public final class ShortLinePreprocessor {
 
         if (rest.startsWith("%liftpatch")) {
             if (sawCommand) {
-                throw syntaxError("the version pragma must precede the first command line",
-                    new SourcePosition(lineNumber, j + 1));
+                report(syntaxError("the version pragma must precede the first command line",
+                    new SourcePosition(lineNumber, j + 1)));
+                return null;
             }
             return new Recognized(Recognized.Kind.PRAGMA, null, false, rest,
                 indent, lineNumber, j + 1, group, line.strip());
