@@ -13,6 +13,7 @@ import fr.cnrs.lacito.liftpatchbox.ast.AtClause;
 import fr.cnrs.lacito.liftpatchbox.ast.LiftPatch;
 import fr.cnrs.lacito.liftpatchbox.ast.Script;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
+import fr.cnrs.lacito.liftpatchbox.timeline.RecordPolicy;
 import fr.cnrs.lacito.liftpatchbox.timeline.ScriptRun;
 import fr.cnrs.lacito.liftpatchbox.timeline.Timeline;
 import fr.cnrs.lacito.liftpatchbox.timeline.TimelineOperation;
@@ -224,6 +225,53 @@ class TimelineTest extends EngineTestSupport {
             assertTrue(memiHas("kitten"));
             timeline.seek(timeline.positions().get(0));
             assertFalse(memiHas("kitten"));
+        }
+    }
+
+    @Test
+    @DisplayName("stopping at the first failure records nothing after the failed script")
+    void stopAtFirstFailure() {
+        try (Timeline timeline = engine.record(dictionary, List.of(
+                script(newSense("puppy")),
+                script(newSense("kitten"), newSense("dog")),
+                script(newSense("hound"))),
+            RecordPolicy.STOP_AT_FIRST_FAILURE)) {
+            assertEquals(RecordPolicy.STOP_AT_FIRST_FAILURE, timeline.policy());
+            assertEquals(List.of(ScriptRun.Status.APPLIED, ScriptRun.Status.FAILED),
+                timeline.scripts().stream().map(ScriptRun::status).toList());
+            assertEquals(1, timeline.stoppedAt().orElseThrow().index());
+            assertEquals(3, timeline.seriesSize());
+            assertTrue(memiHas("puppy"));
+            assertFalse(memiHas("kitten"), "the failed script is rolled back");
+            assertFalse(memiHas("hound"), "the script after the failure never ran");
+            assertSame(timeline.positions().get(1), timeline.end());
+            timeline.seek(timeline.positions().get(2));
+            assertTrue(memiHas("kitten"), "the failed script's state can still be sought");
+        }
+        assertFalse(memiHas("hound"));
+    }
+
+    @Test
+    @DisplayName("stopping at the first failure stops at a rejected script too")
+    void stopAtFirstRejection() {
+        try (Timeline timeline = engine.record(dictionary, List.of(
+                script(LiftPatch.set().assign("definition", "en", "x").on(chain(LiftPatch.label("p")))),
+                script(newSense("hound"))),
+            RecordPolicy.STOP_AT_FIRST_FAILURE)) {
+            assertEquals(List.of(ScriptRun.Status.REJECTED),
+                timeline.scripts().stream().map(ScriptRun::status).toList());
+            assertEquals(1, timeline.positions().size());
+            assertFalse(memiHas("hound"));
+        }
+    }
+
+    @Test
+    @DisplayName("going on after failures is the default, and stops nowhere")
+    void continueIsTheDefault() {
+        try (Timeline timeline = record(script(newSense("kitten"), newSense("dog")), script(newSense("hound")))) {
+            assertEquals(RecordPolicy.CONTINUE, timeline.policy());
+            assertTrue(timeline.stoppedAt().isEmpty());
+            assertTrue(memiHas("hound"));
         }
     }
 

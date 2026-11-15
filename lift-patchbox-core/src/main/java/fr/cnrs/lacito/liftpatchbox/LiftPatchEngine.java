@@ -11,6 +11,7 @@ import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
 import fr.cnrs.lacito.liftpatchbox.model.Journal;
 import fr.cnrs.lacito.liftpatchbox.model.LiftModel;
+import fr.cnrs.lacito.liftpatchbox.timeline.RecordPolicy;
 import fr.cnrs.lacito.liftpatchbox.timeline.Timeline;
 import fr.cnrs.lacito.liftpatchbox.validation.SemanticValidator;
 import java.util.List;
@@ -190,6 +191,21 @@ public final class LiftPatchEngine {
      */
     public Timeline record(LiftDictionary dictionary, List<Script> scripts) {
         return Timeline.record(this, dictionary, scripts);
+    }
+
+    /**
+     * Record a timeline of a series of scripts, deciding what happens after a script that
+     * is rejected or fails: go on with the next ({@link RecordPolicy#CONTINUE}, as
+     * {@link #record(LiftDictionary, List)}), or stop the series there
+     * ({@link RecordPolicy#STOP_AT_FIRST_FAILURE}).
+     *
+     * @param dictionary the dictionary, left at the end of what was recorded
+     * @param scripts    the scripts, in the order they are applied
+     * @param policy     what to do after a script that did not apply
+     * @return the timeline, to close when done
+     */
+    public Timeline record(LiftDictionary dictionary, List<Script> scripts, RecordPolicy policy) {
+        return Timeline.record(this, dictionary, scripts, policy);
     }
 
     /**

@@ -53,14 +53,18 @@ public final class Timeline implements AutoCloseable {
     private final List<ScriptRun> scripts;
     private final List<TimelineOperation> operations;
     private final List<TimelinePosition> positions;
+    private final RecordPolicy policy;
+    private final int seriesSize;
     private final List<Consumer<TimelinePosition>> listeners = new CopyOnWriteArrayList<>();
     private TimelinePosition current;
     private boolean closed;
 
     private Timeline(
         Journal journal, List<ScriptRun> scripts, List<TimelineOperation> operations,
-        List<TimelinePosition> positions
+        List<TimelinePosition> positions, RecordPolicy policy, int seriesSize
     ) {
+        this.policy = policy;
+        this.seriesSize = seriesSize;
         this.journal = journal;
         this.scripts = List.copyOf(scripts);
         this.operations = List.copyOf(operations);
@@ -77,6 +81,22 @@ public final class Timeline implements AutoCloseable {
      * @return the timeline
      */
     public static Timeline record(LiftPatchEngine engine, LiftDictionary dictionary, List<Script> series) {
+        return record(engine, dictionary, series, RecordPolicy.CONTINUE);
+    }
+
+    /**
+     * Apply a series of scripts to a dictionary, recording a timeline of it, and decide what
+     * happens after a script that is rejected or fails.
+     *
+     * @param engine     the engine to validate and run the scripts with
+     * @param dictionary the dictionary, left at the end of what was recorded
+     * @param series     the scripts, in the order they are applied
+     * @param policy     go on after a script that did not apply, or stop there
+     * @return the timeline
+     */
+    public static Timeline record(
+        LiftPatchEngine engine, LiftDictionary dictionary, List<Script> series, RecordPolicy policy
+    ) {
         Journal journal = new Journal(dictionary);
         journal.keepHistory(true);
         List<ScriptRun> runs = new ArrayList<>();
@@ -93,6 +113,9 @@ public final class Timeline implements AutoCloseable {
                         Plan.ofStaticErrors(script.source(), script.syntaxName(),
                             engine.metamodel().version(), errors.errors(), errors.warnings()),
                         List.of()));
+                    if (policy == RecordPolicy.STOP_AT_FIRST_FAILURE) {
+                        break;
+                    }
                     continue;
                 }
                 int start = journal.mark();
@@ -129,13 +152,49 @@ public final class Timeline implements AutoCloseable {
                     }
                     runs.add(new ScriptRun(i, script.source(), ScriptRun.Status.FAILED, plan,
                         scriptOperations));
+                    if (policy == RecordPolicy.STOP_AT_FIRST_FAILURE) {
+                        break;
+                    }
                 }
             }
         } finally {
             // The series is recorded: from now on, the journal only replays.
             journal.close();
         }
-        return new Timeline(journal, runs, operations, positions);
+        return new Timeline(journal, runs, operations, positions, policy, series.size());
+    }
+
+    /**
+     * What the recording did after a script that did not apply.
+     *
+     * @return the policy given to {@link #record(LiftPatchEngine, LiftDictionary, List, RecordPolicy)}
+     */
+    public RecordPolicy policy() {
+        return policy;
+    }
+
+    /**
+     * The script at which a {@link RecordPolicy#STOP_AT_FIRST_FAILURE} recording stopped: the
+     * first that was rejected or failed. The scripts after it are not in {@link #scripts()}.
+     *
+     * @return the run of that script; empty when every script applied, or when the recording
+     *         went on after failures
+     */
+    public java.util.Optional<ScriptRun> stoppedAt() {
+        if (policy != RecordPolicy.STOP_AT_FIRST_FAILURE || scripts.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        ScriptRun last = scripts.get(scripts.size() - 1);
+        return last.status() == ScriptRun.Status.APPLIED ? java.util.Optional.empty() : java.util.Optional.of(last);
+    }
+
+    /**
+     * The number of scripts in the series given, recorded or not.
+     *
+     * @return the size of the series
+     */
+    public int seriesSize() {
+        return seriesSize;
     }
 
     private static TimelineOperation operation(

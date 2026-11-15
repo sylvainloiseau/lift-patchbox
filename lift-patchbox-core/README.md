@@ -76,7 +76,10 @@ try (Timeline timeline = engine.record(dictionary, List.of(script1, script2, scr
 - Each script runs in its own transaction, as `apply` would run it. A script with
   a static error is `REJECTED` and has no position; a script whose command fails
   is `FAILED` and rolled back, and the next script starts from the state before
-  it.
+  it. With `engine.record(dictionary, scripts, RecordPolicy.STOP_AT_FIRST_FAILURE)`
+  the series stops at the first rejected or failed script instead: the scripts
+  after it are not recorded (`stoppedAt()`), for a series whose scripts depend on
+  each other.
 - `positions()` are the start, then one position after each operation. The
   positions of a failed script can be sought, for debugging: they are not
   `isCommitted()`, and show the state the script had reached.
