@@ -13,6 +13,7 @@ import fr.cnrs.lacito.liftpatchbox.model.LiftModel;
 import java.util.ArrayList;
 import java.util.LinkedHashSet;
 import java.util.List;
+import java.util.Optional;
 import java.util.Set;
 import java.util.concurrent.CopyOnWriteArrayList;
 import java.util.function.Consumer;
@@ -33,7 +34,8 @@ import java.util.function.Consumer;
  * <p>Recording applies the series once. Each script is validated, then run in its
  * own transaction, as {@link LiftPatchEngine#apply} would: a script with a static
  * error is rejected and changes nothing; a script whose command fails is rolled
- * back; the next script starts from what the previous ones committed. Labels and
+ * back; the next script starts from what the previous ones committed, unless the
+ * recording {@linkplain RecordPolicy#STOP_AT_FIRST_FAILURE stops there}. Labels and
  * {@code with} scopes do not carry over from one script to the next.</p>
  *
  * <p>Seeking reverts or reapplies the changes the dictionary reported, on the very
@@ -46,9 +48,19 @@ import java.util.function.Consumer;
  * <p>The positions inside a script that failed can be sought too, for debugging:
  * they are {@linkplain TimelinePosition#isCommitted() not committed}, and leaving
  * them restores the committed state.</p>
+ *
+ * <p>A timeline can be <em>reused</em> rather than recorded again from a freshly
+ * loaded dictionary. {@link #rewind()} brings the dictionary back to the state it had
+ * before recording, so that it can be recorded again; {@link #resumeFrom(int, List)}
+ * keeps the scripts before a given one as they were recorded and records new ones
+ * after them, which an editor applying the scripts at every change of one of them
+ * needs: a change in the last script replays that script only.</p>
  */
 public final class Timeline implements AutoCloseable {
 
+    private final LiftPatchEngine engine;
+    private final LiftDictionary dictionary;
+    private final LiftModel model;
     private final Journal journal;
     private final List<ScriptRun> scripts;
     private final List<TimelineOperation> operations;
@@ -57,12 +69,19 @@ public final class Timeline implements AutoCloseable {
     private final int seriesSize;
     private final List<Consumer<TimelinePosition>> listeners = new CopyOnWriteArrayList<>();
     private TimelinePosition current;
+    /** After {@link #close()} or {@link #rewind()}. */
     private boolean closed;
+    /** After {@link #resumeFrom}: the new timeline owns the dictionary. */
+    private boolean superseded;
 
     private Timeline(
-        Journal journal, List<ScriptRun> scripts, List<TimelineOperation> operations,
+        LiftPatchEngine engine, LiftDictionary dictionary, LiftModel model, Journal journal,
+        List<ScriptRun> scripts, List<TimelineOperation> operations,
         List<TimelinePosition> positions, RecordPolicy policy, int seriesSize
     ) {
+        this.engine = engine;
+        this.dictionary = dictionary;
+        this.model = model;
         this.policy = policy;
         this.seriesSize = seriesSize;
         this.journal = journal;
@@ -103,65 +122,213 @@ public final class Timeline implements AutoCloseable {
         List<TimelineOperation> operations = new ArrayList<>();
         List<TimelinePosition> positions = new ArrayList<>();
         positions.add(new TimelinePosition(0, TimelinePosition.Status.START, null, 0, null, 0));
+        LiftModel model;
         try {
-            LiftModel model = new LiftModel(dictionary, engine.metamodel(), journal);
-            for (int i = 0; i < series.size(); i++) {
-                Script script = series.get(i);
-                ErrorCollector errors = engine.validate(script);
-                if (errors.hasErrors()) {
-                    runs.add(new ScriptRun(i, script.source(), ScriptRun.Status.REJECTED,
-                        Plan.ofStaticErrors(script.source(), script.syntaxName(),
-                            engine.metamodel().version(), errors.errors(), errors.warnings()),
-                        List.of()));
-                    if (policy == RecordPolicy.STOP_AT_FIRST_FAILURE) {
-                        break;
-                    }
-                    continue;
-                }
-                int start = journal.mark();
-                Executor executor = engine.newExecutor(model, journal);
-                Plan plan = executor.execute(script);
-                List<Integer> marks = executor.operationMarks();
-                List<TimelineOperation> scriptOperations = new ArrayList<>();
-                if (plan.isOk()) {
-                    journal.commit();
-                    int previous = start;
-                    for (int k = 0; k < plan.operations().size(); k++) {
-                        int mark = Math.max(previous, marks.get(k));
-                        TimelineOperation op = operation(operations, i, plan.operations().get(k),
-                            journal.entriesBetween(previous, mark), true);
-                        scriptOperations.add(op);
-                        positions.add(new TimelinePosition(positions.size(),
-                            TimelinePosition.Status.COMMITTED, op, mark, null, 0));
-                        previous = mark;
-                    }
-                    runs.add(new ScriptRun(i, script.source(), ScriptRun.Status.APPLIED, plan,
-                        scriptOperations));
-                } else {
-                    Journal.Segment segment = journal.cut(start);
-                    int previous = 0;
-                    for (int k = 0; k < plan.operations().size(); k++) {
-                        int count = Math.min(segment.size(),
-                            Math.max(previous, marks.get(k) - start));
-                        TimelineOperation op = operation(operations, i, plan.operations().get(k),
-                            segment.entriesBetween(previous, count), false);
-                        scriptOperations.add(op);
-                        positions.add(new TimelinePosition(positions.size(),
-                            TimelinePosition.Status.FAILED_SCRIPT, op, start, segment, count));
-                        previous = count;
-                    }
-                    runs.add(new ScriptRun(i, script.source(), ScriptRun.Status.FAILED, plan,
-                        scriptOperations));
-                    if (policy == RecordPolicy.STOP_AT_FIRST_FAILURE) {
-                        break;
-                    }
-                }
-            }
+            model = new LiftModel(dictionary, engine.metamodel(), journal);
+            recordInto(engine, model, journal, series, 0, policy, runs, operations, positions);
         } finally {
             // The series is recorded: from now on, the journal only replays.
             journal.close();
         }
-        return new Timeline(journal, runs, operations, positions, policy, series.size());
+        return new Timeline(engine, dictionary, model, journal, runs, operations, positions, policy,
+            series.size());
+    }
+
+    /**
+     * Record scripts after those already recorded, appending to the lists. The journal
+     * must be recording, at the state the scripts start from.
+     */
+    private static void recordInto(
+        LiftPatchEngine engine, LiftModel model, Journal journal, List<Script> series, int firstIndex,
+        RecordPolicy policy, List<ScriptRun> runs, List<TimelineOperation> operations,
+        List<TimelinePosition> positions
+    ) {
+        for (int j = 0; j < series.size(); j++) {
+            int i = firstIndex + j;
+            Script script = series.get(j);
+            ErrorCollector errors = engine.validate(script);
+            if (errors.hasErrors()) {
+                runs.add(new ScriptRun(i, script.source(), ScriptRun.Status.REJECTED,
+                    Plan.ofStaticErrors(script.source(), script.syntaxName(),
+                        engine.metamodel().version(), errors.errors(), errors.warnings()),
+                    List.of()));
+                if (policy == RecordPolicy.STOP_AT_FIRST_FAILURE) {
+                    break;
+                }
+                continue;
+            }
+            int start = journal.mark();
+            Executor executor = engine.newExecutor(model, journal);
+            Plan plan = executor.execute(script);
+            List<Integer> marks = executor.operationMarks();
+            List<TimelineOperation> scriptOperations = new ArrayList<>();
+            if (plan.isOk()) {
+                journal.commit();
+                int previous = start;
+                for (int k = 0; k < plan.operations().size(); k++) {
+                    int mark = Math.max(previous, marks.get(k));
+                    TimelineOperation op = operation(operations, i, plan.operations().get(k),
+                        journal.entriesBetween(previous, mark), true);
+                    scriptOperations.add(op);
+                    positions.add(new TimelinePosition(positions.size(),
+                        TimelinePosition.Status.COMMITTED, op, mark, null, 0));
+                    previous = mark;
+                }
+                runs.add(new ScriptRun(i, script.source(), ScriptRun.Status.APPLIED, plan,
+                    scriptOperations));
+            } else {
+                Journal.Segment segment = journal.cut(start);
+                int previous = 0;
+                for (int k = 0; k < plan.operations().size(); k++) {
+                    int count = Math.min(segment.size(),
+                        Math.max(previous, marks.get(k) - start));
+                    TimelineOperation op = operation(operations, i, plan.operations().get(k),
+                        segment.entriesBetween(previous, count), false);
+                    scriptOperations.add(op);
+                    positions.add(new TimelinePosition(positions.size(),
+                        TimelinePosition.Status.FAILED_SCRIPT, op, start, segment, count));
+                    previous = count;
+                }
+                runs.add(new ScriptRun(i, script.source(), ScriptRun.Status.FAILED, plan,
+                    scriptOperations));
+                if (policy == RecordPolicy.STOP_AT_FIRST_FAILURE) {
+                    break;
+                }
+            }
+        }
+    }
+
+    private static TimelineOperation operation(
+        List<TimelineOperation> all, int scriptIndex, Operation operation,
+        Set<LiftEntry> entries, boolean committed
+    ) {
+        Set<String> ids = new LinkedHashSet<>();
+        for (LiftEntry entry : entries) {
+            entry.getId().ifPresent(ids::add);
+        }
+        TimelineOperation op = new TimelineOperation(all.size() + 1, scriptIndex, operation, ids,
+            committed);
+        all.add(op);
+        return op;
+    }
+
+    /**
+     * Bring the dictionary back to the state it had before recording, and close this
+     * timeline. The dictionary is then what it was: the same entries, components and
+     * header, in the same order, saving to the same document; the components that existed
+     * before are the same objects, and those the series created are detached. It can be
+     * recorded again, with no reload.
+     *
+     * <p>Seek listeners are told once, of the start position, and removed. The data of the
+     * timeline ({@link #scripts()}, {@link #operations()}, {@link #positions()}) can still
+     * be read; seeking, histories and resuming are refused.</p>
+     *
+     * @throws IllegalStateException if the timeline is closed or superseded
+     */
+    public void rewind() {
+        requireOpen();
+        TimelinePosition start = positions.get(0);
+        journal.moveTo(start.mark());
+        journal.discardAll();
+        current = start;
+        closed = true;
+        listeners.forEach(l -> l.accept(start));
+        listeners.clear();
+    }
+
+    /**
+     * Keep the scripts before {@code scriptIndex} as they were recorded, discard the others,
+     * and record {@code newScripts} after them, as the scripts {@code scriptIndex},
+     * {@code scriptIndex + 1}… The dictionary is left at the end of the new series.
+     *
+     * <p>The result is the timeline {@code record} would give for the kept scripts followed
+     * by the new ones on the original dictionary: the same runs and plans, the same
+     * operations (numbered after the kept ones), the same entries changed and the same
+     * dictionary at each position. Labels and {@code with} scopes do not cross scripts, and
+     * the default languages are bound for each script from the dictionary as it then is, so
+     * a script sees the same input either way. Only the LIFT ids the dictionary model
+     * generates for new components differ, as they do between any two recordings.</p>
+     *
+     * <p>The recording uses this timeline's engine and policy. This timeline is superseded:
+     * every later call on it is refused, except reading its data; its seek listeners move to
+     * the new one, which tells them once of its end position. The positions of the discarded
+     * scripts are not positions of the new timeline.</p>
+     *
+     * @param scriptIndex the first script recorded again: {@code 0} records the whole new
+     *                    series, {@code scripts().size()} appends to the series
+     * @param newScripts  the scripts recorded from {@code scriptIndex} on
+     * @return the new timeline
+     * @throws IllegalArgumentException if {@code scriptIndex} is negative, past the scripts
+     *         recorded, or past the script at which a stopping recording stopped
+     * @throws IllegalStateException    if the timeline is closed or superseded
+     */
+    public Timeline resumeFrom(int scriptIndex, List<Script> newScripts) {
+        requireOpen();
+        int limit = stoppedAt().map(ScriptRun::index).orElse(scripts.size());
+        if (scriptIndex < 0 || scriptIndex > limit) {
+            throw new IllegalArgumentException("cannot resume from script " + scriptIndex + ": "
+                + (stoppedAt().isPresent()
+                    ? "the recording stopped at script " + limit
+                    : scripts.size() + " script(s) are recorded"));
+        }
+        // The state the new scripts start from: after the last committed position of the
+        // kept scripts, or the start.
+        TimelinePosition from = positions.get(0);
+        int keptPositions = 1;
+        for (int p = 1; p < positions.size(); p++) {
+            TimelinePosition position = positions.get(p);
+            if (position.operation().orElseThrow().scriptIndex() >= scriptIndex) {
+                break;
+            }
+            keptPositions = p + 1;
+            if (position.isCommitted()) {
+                from = position;
+            }
+        }
+        journal.moveTo(from.mark());
+        journal.truncate(from.mark());
+
+        List<ScriptRun> runs = new ArrayList<>(scripts.subList(0, scriptIndex));
+        List<TimelineOperation> ops = new ArrayList<>();
+        for (TimelineOperation op : operations) {
+            if (op.scriptIndex() < scriptIndex) {
+                ops.add(op);
+            }
+        }
+        List<TimelinePosition> kept = new ArrayList<>(positions.subList(0, keptPositions));
+        journal.resume(dictionary);
+        try {
+            recordInto(engine, model, journal, newScripts, scriptIndex, policy, runs, ops, kept);
+        } finally {
+            journal.close();
+        }
+        Timeline next = new Timeline(engine, dictionary, model, journal, runs, ops, kept, policy,
+            scriptIndex + newScripts.size());
+        superseded = true;
+        next.listeners.addAll(listeners);
+        listeners.clear();
+        TimelinePosition end = next.current;
+        next.listeners.forEach(l -> l.accept(end));
+        return next;
+    }
+
+    /**
+     * Whether the timeline can still seek, rewind and resume: false after {@link #close()},
+     * {@link #rewind()} and {@link #resumeFrom}.
+     *
+     * @return whether the timeline is open
+     */
+    public boolean isOpen() {
+        return !closed && !superseded;
+    }
+
+    private void requireOpen() {
+        if (superseded) {
+            throw new IllegalStateException("the timeline was superseded by resumeFrom");
+        }
+        if (closed) {
+            throw new IllegalStateException("the timeline is closed");
+        }
     }
 
     /**
@@ -180,12 +347,12 @@ public final class Timeline implements AutoCloseable {
      * @return the run of that script; empty when every script applied, or when the recording
      *         went on after failures
      */
-    public java.util.Optional<ScriptRun> stoppedAt() {
+    public Optional<ScriptRun> stoppedAt() {
         if (policy != RecordPolicy.STOP_AT_FIRST_FAILURE || scripts.isEmpty()) {
-            return java.util.Optional.empty();
+            return Optional.empty();
         }
         ScriptRun last = scripts.get(scripts.size() - 1);
-        return last.status() == ScriptRun.Status.APPLIED ? java.util.Optional.empty() : java.util.Optional.of(last);
+        return last.status() == ScriptRun.Status.APPLIED ? Optional.empty() : Optional.of(last);
     }
 
     /**
@@ -195,20 +362,6 @@ public final class Timeline implements AutoCloseable {
      */
     public int seriesSize() {
         return seriesSize;
-    }
-
-    private static TimelineOperation operation(
-        List<TimelineOperation> all, int scriptIndex, Operation operation,
-        Set<LiftEntry> entries, boolean committed
-    ) {
-        Set<String> ids = new LinkedHashSet<>();
-        for (LiftEntry entry : entries) {
-            entry.getId().ifPresent(ids::add);
-        }
-        TimelineOperation op = new TimelineOperation(all.size() + 1, scriptIndex, operation, ids,
-            committed);
-        all.add(op);
-        return op;
     }
 
     /**
@@ -268,10 +421,8 @@ public final class Timeline implements AutoCloseable {
      * @param position one of {@link #positions()}
      */
     public void seek(TimelinePosition position) {
-        if (closed) {
-            throw new IllegalStateException("the timeline is closed");
-        }
-        if (positions.get(position.index()) != position) {
+        requireOpen();
+        if (position.index() >= positions.size() || positions.get(position.index()) != position) {
             throw new IllegalArgumentException("not a position of this timeline: " + position);
         }
         journal.moveTo(position.mark());
@@ -303,6 +454,9 @@ public final class Timeline implements AutoCloseable {
      * @return the operations
      */
     public List<TimelineOperation> historyOf(String entryId, boolean includeFailed) {
+        if (superseded) {
+            throw new IllegalStateException("the timeline was superseded by resumeFrom");
+        }
         return operations.stream()
             .filter(op -> op.entryIds().contains(entryId))
             .filter(op -> includeFailed || op.committed())
@@ -328,11 +482,12 @@ public final class Timeline implements AutoCloseable {
     }
 
     /**
-     * Bring the dictionary back to the end of the series, and allow no further seek.
+     * Bring the dictionary back to the end of the series, and allow no further seek. Nothing
+     * is done for a timeline already closed, rewound or superseded.
      */
     @Override
     public void close() {
-        if (!closed) {
+        if (!closed && !superseded) {
             seek(end());
             closed = true;
         }

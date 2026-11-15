@@ -92,6 +92,14 @@ try (Timeline timeline = engine.record(dictionary, List.of(script1, script2, scr
   subtree, including its creation and its deletion; `historyOf(entryId, true)`
   adds those of failed scripts. A move between entries belongs to both; a
   reference left dangling by a deletion does not change the entry holding it.
+- A timeline can be reused instead of recording again from a freshly loaded
+  dictionary. `rewind()` brings the dictionary back to the state it had before
+  recording (the same objects, the same saved document) and closes the
+  timeline; the dictionary can then be recorded again. `resumeFrom(k, scripts)`
+  keeps the scripts before `k` as recorded and records `scripts` after them: the
+  result is what recording the whole new series would give, and a change in the
+  last script of a long series replays that script only. The old timeline is
+  superseded; its seek listeners move to the new one.
 
 ## Specification
 

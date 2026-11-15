@@ -379,6 +379,43 @@ public final class Journal implements AutoCloseable {
     }
 
     /**
+     * Record the changes of the dictionary again, after {@link #close()}: a timeline
+     * resuming a series. Nothing is done if the journal is recording.
+     *
+     * @param dictionary the dictionary this journal recorded
+     */
+    public void resume(LiftDictionary dictionary) {
+        if (subscription == null) {
+            subscription = dictionary.addChangeListener(this::onChange);
+        }
+    }
+
+    /**
+     * Move the cursor to a position, leaving any entered segment, and discard the changes
+     * past it: the history after that position is forgotten.
+     *
+     * @param mark a position obtained from {@link #mark()}
+     */
+    public void truncate(int mark) {
+        moveTo(mark);
+        changes.subList(cursor, changes.size()).clear();
+    }
+
+    /**
+     * Forget every change, after the cursor was moved to the start: a timeline rewound,
+     * whose dictionary is recorded again from scratch.
+     *
+     * @throws IllegalStateException if changes are still applied
+     */
+    public void discardAll() {
+        leave();
+        if (cursor != 0) {
+            throw new IllegalStateException(cursor + " change(s) are still applied");
+        }
+        changes.clear();
+    }
+
+    /**
      * Stop recording the changes of the dictionary. The changes already recorded
      * can still be undone and redone.
      */
