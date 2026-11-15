@@ -47,7 +47,7 @@ public final class ErrorCollector {
      * @param position       where in the script the error was raised
      * @param operationIndex the 1-based operation index, or 0
      */
-    public void add(ErrorCode code, String message, SourcePosition position, int operationIndex) {
+    public void add(ErrorCode code, String message, SourceRange position, int operationIndex) {
         add(new LiftPatchError(code, message, position, operationIndex));
     }
 

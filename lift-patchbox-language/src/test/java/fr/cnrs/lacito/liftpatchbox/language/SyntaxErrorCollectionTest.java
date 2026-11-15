@@ -40,7 +40,7 @@ class SyntaxErrorCollectionTest {
     }
 
     private static List<Integer> lines(List<LiftPatchError> errors) {
-        return errors.stream().map(e -> e.position().line()).toList();
+        return errors.stream().map(e -> e.range().startLine()).toList();
     }
 
     private static List<ErrorCode> codes(List<LiftPatchError> errors) {
@@ -111,7 +111,7 @@ class SyntaxErrorCollectionTest {
                 """, Syntax.CONCISE, "test.liftpatchshort");
             LiftPatchError error = check.staticErrors().get(0);
             assertEquals(ModelErrorCode.WILDCARD_NOT_ALLOWED, error.code());
-            assertEquals(3, error.position().line());
+            assertEquals(3, error.range().startLine());
         }
     }
 
@@ -199,7 +199,7 @@ class SyntaxErrorCollectionTest {
             LiftPatchException e = assertThrows(LiftPatchException.class, () -> parser.parse(
                 "c e(\"a\"\nc e(\"b\")\nc e(\"c\"\n", Syntax.CONCISE, "test.liftpatchshort"));
             assertEquals(List.of(1, 3), lines(e.errors()));
-            assertEquals(1, e.firstError().position().line());
+            assertEquals(1, e.firstError().range().startLine());
         }
     }
 

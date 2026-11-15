@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -29,7 +29,7 @@ import java.util.Map;
  *
  * <p>Every builder carries an optional source position, which the visitors fill
  * in from the ANTLR tokens so that an error can be pointed back at the line the
- * user wrote. Positions default to {@link SourcePosition#UNKNOWN} for a command
+ * user wrote. Positions default to {@link SourceRange#UNKNOWN} for a command
  * built programmatically.</p>
  *
  * <p>The builders perform no validation beyond what a record's own constructor
@@ -220,7 +220,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive languageDefault(LanguageKind kind, String language) {
-        return new Directive.LanguageDefault(kind, language, SourcePosition.UNKNOWN);
+        return new Directive.LanguageDefault(kind, language, SourceRange.UNKNOWN);
     }
 
     /**
@@ -231,7 +231,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive languageCreate(LanguageKind kind, String language) {
-        return new Directive.LanguageCreate(kind, language, SourcePosition.UNKNOWN);
+        return new Directive.LanguageCreate(kind, language, SourceRange.UNKNOWN);
     }
 
     /**
@@ -242,7 +242,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive languageDelete(LanguageKind kind, String language) {
-        return new Directive.LanguageDelete(kind, language, SourcePosition.UNKNOWN);
+        return new Directive.LanguageDelete(kind, language, SourceRange.UNKNOWN);
     }
 
     /**
@@ -252,7 +252,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive featureSetCreate(String name) {
-        return new Directive.FeatureSetCreate(name, SourcePosition.UNKNOWN);
+        return new Directive.FeatureSetCreate(name, SourceRange.UNKNOWN);
     }
 
     /**
@@ -262,7 +262,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive featureSetDelete(String name) {
-        return new Directive.FeatureSetDelete(name, SourcePosition.UNKNOWN);
+        return new Directive.FeatureSetDelete(name, SourceRange.UNKNOWN);
     }
 
     /**
@@ -273,7 +273,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive featureSetRename(String name, String newName) {
-        return new Directive.FeatureSetRename(name, newName, SourcePosition.UNKNOWN);
+        return new Directive.FeatureSetRename(name, newName, SourceRange.UNKNOWN);
     }
 
     /**
@@ -284,7 +284,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive featureCreate(String name, String featureSet) {
-        return new Directive.FeatureCreate(name, featureSet, SourcePosition.UNKNOWN);
+        return new Directive.FeatureCreate(name, featureSet, SourceRange.UNKNOWN);
     }
 
     /**
@@ -295,7 +295,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive featureDelete(String name, String featureSet) {
-        return new Directive.FeatureDelete(name, featureSet, SourcePosition.UNKNOWN);
+        return new Directive.FeatureDelete(name, featureSet, SourceRange.UNKNOWN);
     }
 
     /**
@@ -307,7 +307,7 @@ public final class LiftPatch {
      * @return the directive, at an unknown position
      */
     public static Directive featureRename(String name, String featureSet, String newName) {
-        return new Directive.FeatureRename(name, featureSet, newName, SourcePosition.UNKNOWN);
+        return new Directive.FeatureRename(name, featureSet, newName, SourceRange.UNKNOWN);
     }
 
     /**
@@ -319,7 +319,7 @@ public final class LiftPatch {
      */
     public static Directive fieldCreate(String name, String model) {
         return new Directive.DefinitionCreate(
-            Directive.DefinitionKind.FIELD, name, model, null, SourcePosition.UNKNOWN);
+            Directive.DefinitionKind.FIELD, name, model, null, SourceRange.UNKNOWN);
     }
 
     /**
@@ -332,7 +332,7 @@ public final class LiftPatch {
      */
     public static Directive traitCreate(String name, String model, String range) {
         return new Directive.DefinitionCreate(
-            Directive.DefinitionKind.TRAIT, name, model, range, SourcePosition.UNKNOWN);
+            Directive.DefinitionKind.TRAIT, name, model, range, SourceRange.UNKNOWN);
     }
 
     /**
@@ -343,7 +343,7 @@ public final class LiftPatch {
      */
     public static Directive fieldDelete(String name) {
         return new Directive.DefinitionDelete(
-            Directive.DefinitionKind.FIELD, name, SourcePosition.UNKNOWN);
+            Directive.DefinitionKind.FIELD, name, SourceRange.UNKNOWN);
     }
 
     /**
@@ -354,7 +354,7 @@ public final class LiftPatch {
      */
     public static Directive traitDelete(String name) {
         return new Directive.DefinitionDelete(
-            Directive.DefinitionKind.TRAIT, name, SourcePosition.UNKNOWN);
+            Directive.DefinitionKind.TRAIT, name, SourceRange.UNKNOWN);
     }
 
     // ===================================================================
@@ -390,7 +390,7 @@ public final class LiftPatch {
     public static Value.Multitext multitext(Map<String, String> values) {
         List<LangText> entries = new ArrayList<>();
         values.forEach((lang, t) -> entries.add(LangText.of(lang, t)));
-        return new Value.Multitext(entries, SourcePosition.UNKNOWN);
+        return new Value.Multitext(entries, SourceRange.UNKNOWN);
     }
 
     /**
@@ -526,7 +526,7 @@ public final class LiftPatch {
         private Integer ordinal;
         private String typeKey;
         private Multiplicity multiplicity;
-        private SourcePosition position = SourcePosition.UNKNOWN;
+        private SourceRange position = SourceRange.UNKNOWN;
 
         private StepBuilder(String componentType) {
             this.componentType = componentType;
@@ -538,7 +538,7 @@ public final class LiftPatch {
          * @param position the source position
          * @return this builder
          */
-        public StepBuilder at(SourcePosition position) {
+        public StepBuilder at(SourceRange position) {
             this.position = position;
             return this;
         }
@@ -846,7 +846,7 @@ public final class LiftPatch {
 
         private final String componentType;
         private final List<Initializer> initializers = new ArrayList<>();
-        private SourcePosition position = SourcePosition.UNKNOWN;
+        private SourceRange position = SourceRange.UNKNOWN;
 
         private ConstructorBuilder(String componentType) {
             this.componentType = componentType;
@@ -858,7 +858,7 @@ public final class LiftPatch {
          * @param position the source position
          * @return this builder
          */
-        public ConstructorBuilder at(SourcePosition position) {
+        public ConstructorBuilder at(SourceRange position) {
             this.position = position;
             return this;
         }
@@ -959,7 +959,7 @@ public final class LiftPatch {
     /** Common state of every command builder: a position and the source text. */
     private abstract static class AbstractCommandBuilder implements CommandBuilder {
 
-        SourcePosition position = SourcePosition.UNKNOWN;
+        SourceRange position = SourceRange.UNKNOWN;
         String sourceText;
     }
 
@@ -1083,7 +1083,7 @@ public final class LiftPatch {
          * @param text     the source text, or {@code null}
          * @return this builder
          */
-        public CreateBuilder source(SourcePosition position, String text) {
+        public CreateBuilder source(SourceRange position, String text) {
             this.position = position;
             this.sourceText = text;
             return this;
@@ -1227,7 +1227,7 @@ public final class LiftPatch {
          * @param text     the source text, or {@code null}
          * @return this builder
          */
-        public UpsertBuilder source(SourcePosition position, String text) {
+        public UpsertBuilder source(SourceRange position, String text) {
             this.position = position;
             this.sourceText = text;
             return this;
@@ -1289,7 +1289,7 @@ public final class LiftPatch {
          * @param text     the source text, or {@code null}
          * @return this builder
          */
-        public EnsureBuilder source(SourcePosition position, String text) {
+        public EnsureBuilder source(SourceRange position, String text) {
             this.position = position;
             this.sourceText = text;
             return this;
@@ -1339,7 +1339,7 @@ public final class LiftPatch {
          * @param text     the source text, or {@code null}
          * @return this builder
          */
-        public DeleteBuilder source(SourcePosition position, String text) {
+        public DeleteBuilder source(SourceRange position, String text) {
             this.position = position;
             this.sourceText = text;
             return this;
@@ -1423,7 +1423,7 @@ public final class LiftPatch {
          * @param text     the source text, or {@code null}
          * @return this builder
          */
-        public MoveBuilder source(SourcePosition position, String text) {
+        public MoveBuilder source(SourceRange position, String text) {
             this.position = position;
             this.sourceText = text;
             return this;
@@ -1532,7 +1532,7 @@ public final class LiftPatch {
          * @param text     the source text, or {@code null}
          * @return this builder
          */
-        public PropertyCommandBuilder source(SourcePosition position, String text) {
+        public PropertyCommandBuilder source(SourceRange position, String text) {
             this.position = position;
             this.sourceText = text;
             return this;
@@ -1558,11 +1558,11 @@ public final class LiftPatch {
 
         private final BlockHeader header;
         private final List<Item> body = new ArrayList<>();
-        private SourcePosition position = SourcePosition.UNKNOWN;
+        private SourceRange position = SourceRange.UNKNOWN;
 
         private BlockBuilder(BlockHeader header) {
             this.header = header;
-            this.position = header.position();
+            this.position = header.range();
         }
 
         /**
@@ -1593,7 +1593,7 @@ public final class LiftPatch {
          * @param position the source position
          * @return this builder
          */
-        public BlockBuilder at(SourcePosition position) {
+        public BlockBuilder at(SourceRange position) {
             this.position = position;
             return this;
         }
@@ -1616,7 +1616,7 @@ public final class LiftPatch {
      * @return the header, at the chain's position
      */
     public static BlockHeader selectorHeader(Chain chain, String label) {
-        return new BlockHeader.Selector(chain, label, chain.position());
+        return new BlockHeader.Selector(chain, label, chain.range());
     }
 
     /**
@@ -1637,6 +1637,6 @@ public final class LiftPatch {
      * @return the header, at an unknown position
      */
     public static BlockHeader withHeader(Map<LanguageKind, String> bindings) {
-        return new BlockHeader.With(new LinkedHashMap<>(bindings), SourcePosition.UNKNOWN);
+        return new BlockHeader.With(new LinkedHashMap<>(bindings), SourceRange.UNKNOWN);
     }
 }

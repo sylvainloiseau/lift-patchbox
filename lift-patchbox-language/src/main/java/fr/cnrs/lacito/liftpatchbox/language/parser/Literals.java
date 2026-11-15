@@ -3,7 +3,7 @@ package fr.cnrs.lacito.liftpatchbox.language.parser;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 
 /**
  * Decoding of the string literals of both surface syntaxes.
@@ -37,7 +37,7 @@ public final class Literals {
      *         double-quoted string contains a backslash followed by anything
      *         other than {@code "} or {@code \}
      */
-    public static String unquote(String literal, SourcePosition position) {
+    public static String unquote(String literal, SourceRange position) {
         if (literal.length() < 2) {
             return literal;
         }
@@ -50,7 +50,7 @@ public final class Literals {
         return body.replace("''", "'");
     }
 
-    private static String unquoteDouble(String body, SourcePosition position) {
+    private static String unquoteDouble(String body, SourceRange position) {
         StringBuilder sb = new StringBuilder(body.length());
         for (int i = 0; i < body.length(); i++) {
             char c = body.charAt(i);
@@ -74,7 +74,7 @@ public final class Literals {
         return sb.toString();
     }
 
-    private static LiftPatchException syntaxError(String message, SourcePosition position) {
+    private static LiftPatchException syntaxError(String message, SourceRange position) {
         return new LiftPatchException(
             LiftPatchError.of(ModelErrorCode.SYNTAX_ERROR, message, position));
     }

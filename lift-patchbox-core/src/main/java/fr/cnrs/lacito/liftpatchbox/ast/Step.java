@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import java.util.List;
 
 /**
@@ -20,7 +20,7 @@ public sealed interface Step permits Step.Component, Step.Label {
      *
      * @return the source position
      */
-    SourcePosition position();
+    SourceRange range();
 
     /**
      * The multiplicity keyword written immediately before this step, if any.
@@ -37,7 +37,7 @@ public sealed interface Step permits Step.Component, Step.Label {
      * @param ordinal       the ordinal {@code #n}, or {@code null}
      * @param typeKey       the type key {@code ^t}, or {@code null}
      * @param multiplicity  the multiplicity keyword, or {@code null}
-     * @param position      where the step was written
+     * @param range         where the step was written
      */
     record Component(
         String componentType,
@@ -45,7 +45,7 @@ public sealed interface Step permits Step.Component, Step.Label {
         Integer ordinal,
         String typeKey,
         Multiplicity multiplicity,
-        SourcePosition position
+        SourceRange range
     ) implements Step {
 
         /**
@@ -56,7 +56,7 @@ public sealed interface Step permits Step.Component, Step.Label {
          * @param ordinal       the ordinal, or {@code null}
          * @param typeKey       the type key, or {@code null}
          * @param multiplicity  the multiplicity keyword, or {@code null}
-         * @param position      where the step was written
+         * @param range         where the step was written
          */
         public Component {
             predicates = List.copyOf(predicates);
@@ -70,7 +70,7 @@ public sealed interface Step permits Step.Component, Step.Label {
          * @return the step, at an unknown position
          */
         public static Component bare(String componentType) {
-            return new Component(componentType, List.of(), null, null, null, SourcePosition.UNKNOWN);
+            return new Component(componentType, List.of(), null, null, null, SourceRange.UNKNOWN);
         }
 
         /**
@@ -99,7 +99,7 @@ public sealed interface Step permits Step.Component, Step.Label {
          * @return a copy carrying {@code m}
          */
         public Component withMultiplicity(Multiplicity m) {
-            return new Component(componentType, predicates, ordinal, typeKey, m, position);
+            return new Component(componentType, predicates, ordinal, typeKey, m, range);
         }
 
         @Override
@@ -136,9 +136,9 @@ public sealed interface Step permits Step.Component, Step.Label {
      *
      * @param name         the label name, without the leading {@code $}
      * @param multiplicity always {@code null}; a label denotes one component
-     * @param position     where the label was written
+     * @param range        where the label was written
      */
-    record Label(String name, Multiplicity multiplicity, SourcePosition position) implements Step {
+    record Label(String name, Multiplicity multiplicity, SourceRange range) implements Step {
 
         /**
          * A label step at an unknown position.
@@ -147,7 +147,7 @@ public sealed interface Step permits Step.Component, Step.Label {
          * @return the step
          */
         public static Label of(String name) {
-            return new Label(name, null, SourcePosition.UNKNOWN);
+            return new Label(name, null, SourceRange.UNKNOWN);
         }
 
         @Override

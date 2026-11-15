@@ -11,7 +11,7 @@ import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.metamodel.ComponentTypeDef;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Datatype;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
@@ -92,7 +92,7 @@ public final class Resolver {
      * @throws LiftPatchException with {@link ModelErrorCode#UNKNOWN_LABEL} if the label
      *         is not bound
      */
-    public ComponentRef label(String name, SourcePosition position) {
+    public ComponentRef label(String name, SourceRange position) {
         ComponentRef ref = labels.get(name);
         if (ref == null) {
             throw error(ModelErrorCode.UNKNOWN_LABEL,
@@ -186,7 +186,7 @@ public final class Resolver {
 
     private List<ComponentRef> resolveRootStep(Step step, ComponentRef blockComponent) {
         if (step instanceof Step.Label labelStep) {
-            return List.of(label(labelStep.name(), labelStep.position()));
+            return List.of(label(labelStep.name(), labelStep.range()));
         }
         Step.Component component = (Step.Component) step;
         ComponentRef parent = Metamodel.ENTRY.equals(component.componentType())
@@ -194,7 +194,7 @@ public final class Resolver {
             : blockComponent;
         if (parent == null) {
             throw error(ModelErrorCode.INCOMPLETE_ANCESTOR_CHAIN,
-                "the chain of ancestors must be continued up to the root", step.position());
+                "the chain of ancestors must be continued up to the root", step.range());
         }
         return resolveStepUnder(parent, step);
     }
@@ -207,16 +207,16 @@ public final class Resolver {
                 throw error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
                     "the ordinal " + c.ordinal() + " is greater than the number of same-type "
                         + "siblings under this parent",
-                    step.position());
+                    step.range());
             }
             throw error(ModelErrorCode.NOT_FOUND,
-                "no component matches `" + step + "`", step.position());
+                "no component matches `" + step + "`", step.range());
         }
         if (unique && found.size() > 1) {
             throw error(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 found.size() + " components match `" + step
                     + "`, and this selector must designate exactly one",
-                step.position());
+                step.range());
         }
     }
 
@@ -233,7 +233,7 @@ public final class Resolver {
      */
     public List<ComponentRef> resolveStepUnder(ComponentRef parent, Step step) {
         if (step instanceof Step.Label labelStep) {
-            ComponentRef ref = label(labelStep.name(), labelStep.position());
+            ComponentRef ref = label(labelStep.name(), labelStep.range());
             return List.of(ref);
         }
         Step.Component component = (Step.Component) step;
@@ -305,7 +305,7 @@ public final class Resolver {
         String language = predicate.language() != null
             ? predicate.language()
             : languages.defaultFor(LanguageKind.META);
-        requireLanguage(LanguageKind.META, language, predicate.position());
+        requireLanguage(LanguageKind.META, language, predicate.range());
         for (ComponentRef sense : model.children(ref, "sense")) {
             if (predicate.value().equals(model.qualified(sense, "gloss", language).orElse(null))) {
                 return true;
@@ -315,7 +315,7 @@ public final class Resolver {
     }
 
     private boolean matchesExistence(ComponentRef ref, Predicate.Existence predicate) {
-        PropertyDef p = propertyOf(ref, predicate.property(), predicate.position());
+        PropertyDef p = propertyOf(ref, predicate.property(), predicate.range());
         boolean present;
         if (p.datatype().isMultitext()) {
             present = predicate.property().language() == null
@@ -328,8 +328,8 @@ public final class Resolver {
     }
 
     private boolean matchesComparison(ComponentRef ref, Predicate.Comparison predicate) {
-        PropertyDef p = propertyOf(ref, predicate.property(), predicate.position());
-        String expected = scalarValueOf(predicate.value(), p, predicate.position());
+        PropertyDef p = propertyOf(ref, predicate.property(), predicate.range());
+        String expected = scalarValueOf(predicate.value(), p, predicate.range());
 
         if (!p.datatype().isMultitext()) {
             return compare(model.scalar(ref, p.name()).orElse(null), expected, predicate.operator());
@@ -356,7 +356,7 @@ public final class Resolver {
             }
             return false;
         }
-        String language = languageOf(predicate.property(), p, predicate.position());
+        String language = languageOf(predicate.property(), p, predicate.range());
         return compare(
             model.qualified(ref, p.name(), language).orElse(null), expected, predicate.operator());
     }
@@ -385,7 +385,7 @@ public final class Resolver {
      * @return the property definition
      */
     public PropertyDef propertyOf(
-        ComponentRef ref, PropertyRef property, SourcePosition position
+        ComponentRef ref, PropertyRef property, SourceRange position
     ) {
         ComponentTypeDef def = metamodel.requireComponentType(ref.componentType());
         Optional<PropertyDef> p = def.property(property.name());
@@ -407,7 +407,7 @@ public final class Resolver {
      * @param position where the reference was written
      * @return the language code
      */
-    public String languageOf(PropertyRef ref, PropertyDef property, SourcePosition position) {
+    public String languageOf(PropertyRef ref, PropertyDef property, SourceRange position) {
         String language = ref.language() != null
             ? ref.language()
             : languages.defaultFor(property.qualifier());
@@ -422,7 +422,7 @@ public final class Resolver {
      * @param language the language code
      * @param position where it was written
      */
-    public void requireLanguage(LanguageKind kind, String language, SourcePosition position) {
+    public void requireLanguage(LanguageKind kind, String language, SourceRange position) {
         if (language == null || !model.hasLanguage(kind, language)) {
             throw error(kind.noSuchLanguageError(),
                 "`" + language + "` is not in the dictionary's " + kind.jsonName()
@@ -443,7 +443,7 @@ public final class Resolver {
      * @param position where the value was written
      * @return the string to store or compare
      */
-    public String scalarValueOf(Value value, PropertyDef property, SourcePosition position) {
+    public String scalarValueOf(Value value, PropertyDef property, SourceRange position) {
         if (property.datatype() == Datatype.REFERENCE) {
             ComponentRef target = switch (value) {
                 case Value.ChainRef chain -> resolveOne(chain.chain(), null);
@@ -472,7 +472,7 @@ public final class Resolver {
      * @param position where the command was written
      * @return the exception, for the caller to throw
      */
-    public LiftPatchException error(ErrorCode code, String message, SourcePosition position) {
+    public LiftPatchException error(ErrorCode code, String message, SourceRange position) {
         return new LiftPatchException(
             new LiftPatchError(code, message, position, operationIndex));
     }

@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import java.util.List;
 
 /**
@@ -14,16 +14,16 @@ import java.util.List;
  *
  * @param header   what stands before the opening brace
  * @param body     the items of the body, in source order
- * @param position where the block begins
+ * @param range    where the block begins
  */
-public record Block(BlockHeader header, List<Item> body, SourcePosition position) implements Item {
+public record Block(BlockHeader header, List<Item> body, SourceRange range) implements Item {
 
     /**
      * Canonical constructor, taking an unmodifiable copy of the body.
      *
      * @param header   the block header
      * @param body     the items of the body
-     * @param position where the block begins
+     * @param range    where the block begins
      */
     public Block {
         body = List.copyOf(body);

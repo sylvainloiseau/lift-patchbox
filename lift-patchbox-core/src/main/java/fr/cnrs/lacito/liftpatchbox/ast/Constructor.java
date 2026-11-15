@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -15,12 +15,12 @@ import java.util.List;
  *
  * @param componentType the component type name, spelled in full
  * @param initializers  the parenthesized list, in the order written
- * @param position      where the constructor was written
+ * @param range         where the constructor was written
  */
 public record Constructor(
     String componentType,
     List<Initializer> initializers,
-    SourcePosition position
+    SourceRange range
 ) {
 
     /**
@@ -28,7 +28,7 @@ public record Constructor(
      *
      * @param componentType the component type name
      * @param initializers  the parenthesized list
-     * @param position      where the constructor was written
+     * @param range         where the constructor was written
      */
     public Constructor {
         initializers = List.copyOf(initializers);
@@ -41,7 +41,7 @@ public record Constructor(
      * @return the constructor
      */
     public static Constructor of(String componentType) {
-        return new Constructor(componentType, List.of(), SourcePosition.UNKNOWN);
+        return new Constructor(componentType, List.of(), SourceRange.UNKNOWN);
     }
 
     /**

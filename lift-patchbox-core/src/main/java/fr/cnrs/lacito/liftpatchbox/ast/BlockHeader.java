@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 import java.util.Map;
 
@@ -20,7 +20,7 @@ public sealed interface BlockHeader permits BlockHeader.Selector, BlockHeader.An
      *
      * @return the source position
      */
-    SourcePosition position();
+    SourceRange range();
 
     /**
      * The label the header binds, if any.
@@ -39,9 +39,9 @@ public sealed interface BlockHeader permits BlockHeader.Selector, BlockHeader.An
      *
      * @param chain    the chain designating the parent of the body
      * @param label    the label bound to it, or {@code null}
-     * @param position where the header begins
+     * @param range    where the header begins
      */
-    record Selector(Chain chain, String label, SourcePosition position) implements BlockHeader {
+    record Selector(Chain chain, String label, SourceRange range) implements BlockHeader {
 
         @Override
         public String toString() {
@@ -74,8 +74,8 @@ public sealed interface BlockHeader permits BlockHeader.Selector, BlockHeader.An
         }
 
         @Override
-        public SourcePosition position() {
-            return command.position();
+        public SourceRange range() {
+            return command.range();
         }
 
         @Override
@@ -100,15 +100,15 @@ public sealed interface BlockHeader permits BlockHeader.Selector, BlockHeader.An
      * any (Part 1, section 2.1.2).
      *
      * @param bindings the language kinds bound, and the code each is bound to
-     * @param position where the header begins
+     * @param range    where the header begins
      */
-    record With(Map<LanguageKind, String> bindings, SourcePosition position) implements BlockHeader {
+    record With(Map<LanguageKind, String> bindings, SourceRange range) implements BlockHeader {
 
         /**
          * Canonical constructor, taking an unmodifiable copy of the bindings.
          *
          * @param bindings the language kinds bound and their codes
-         * @param position where the header begins
+         * @param range    where the header begins
          */
         public With {
             bindings = Map.copyOf(bindings);

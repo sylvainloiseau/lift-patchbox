@@ -9,7 +9,7 @@ import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchWarning;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
 import fr.cnrs.lacito.liftpatchbox.language.parser.ParseOutcome;
 import fr.cnrs.lacito.liftpatchbox.language.parser.ScriptParser;
@@ -207,30 +207,37 @@ public final class LiftPatchBox {
         while (m.find()) {
             bound.add(m.group(1));
         }
-        String[] lines = text.split("\\R", -1);
         List<LiftPatchError> kept = new ArrayList<>();
         for (LiftPatchError e : errors) {
             if (e.code() == ModelErrorCode.UNKNOWN_LABEL) {
-                String label = labelAt(lines, e.position());
+                String label = labelAt(text, e.range());
                 if (label != null && bound.contains(label)) {
                     continue;
                 }
             }
-            kept.add(new LiftPatchError(e.code(), e.message(), e.position(), 0));
+            kept.add(new LiftPatchError(e.code(), e.message(), e.range(), 0));
         }
         return kept;
     }
 
-    /** The label referred to at a position, or {@code null} when none can be read there. */
-    private static String labelAt(String[] lines, SourcePosition position) {
-        if (!position.isKnown() || position.line() > lines.length) {
+    /** The label referred to where an error is, or {@code null} when none can be read there. */
+    private static String labelAt(String text, SourceRange range) {
+        if (!range.isKnown() || range.startOffset() > text.length()) {
             return null;
         }
-        String line = lines[position.line() - 1];
-        Matcher m = LABEL_REFERENCE.matcher(line);
-        return m.find(Math.min(Math.max(position.column() - 1, 0), line.length()))
-            ? m.group(1)
-            : null;
+        int end = range.endOffset() > range.startOffset() ? range.endOffset() : lineEnd(text, range.startOffset());
+        Matcher m = LABEL_REFERENCE.matcher(text).region(range.startOffset(), Math.min(end, text.length()));
+        return m.find() ? m.group(1) : null;
+    }
+
+    private static int lineEnd(String text, int from) {
+        for (int i = from; i < text.length(); i++) {
+            char c = text.charAt(i);
+            if (c == '\n' || c == '\r') {
+                return i;
+            }
+        }
+        return text.length();
     }
 
     // ===================================================================

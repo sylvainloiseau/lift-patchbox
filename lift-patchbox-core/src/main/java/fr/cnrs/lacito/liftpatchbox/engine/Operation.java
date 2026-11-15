@@ -1,7 +1,7 @@
 package fr.cnrs.lacito.liftpatchbox.engine;
 
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import java.util.List;
 
 /**
@@ -18,7 +18,7 @@ import java.util.List;
  * order.</p>
  *
  * @param index        the 1-based index, flat across the whole script in source order
- * @param position     where the command was written
+ * @param range        where the command was written
  * @param command      the source text of the command
  * @param verb         the verb, or {@code "language-create"} for the directive
  * @param multiplicity the multiplicity keyword written, or {@code null}
@@ -30,7 +30,7 @@ import java.util.List;
  */
 public record Operation(
     int index,
-    SourcePosition position,
+    SourceRange range,
     String command,
     String verb,
     String multiplicity,
@@ -45,7 +45,7 @@ public record Operation(
      * Canonical constructor, taking unmodifiable copies of the two lists.
      *
      * @param index        the 1-based operation index
-     * @param position     where the command was written
+     * @param range        where the command was written
      * @param command      the source text
      * @param verb         the verb
      * @param multiplicity the multiplicity keyword, or {@code null}

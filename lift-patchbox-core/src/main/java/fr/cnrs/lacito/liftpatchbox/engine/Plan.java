@@ -157,7 +157,7 @@ public record Plan(
             LiftPatchError e = staticErrors.get(i);
             sb.append(i > 0 ? ",\n    " : "\n    ").append("{ \"code\": ").append(quote(e.code().id()))
                 .append(", \"message\": ").append(quote(e.message()))
-                .append(", \"position\": ").append(position(e.position())).append(" }");
+                .append(", \"position\": ").append(position(e.range())).append(" }");
         }
         sb.append(staticErrors.isEmpty() ? "],\n" : "\n  ],\n");
 
@@ -165,7 +165,7 @@ public record Plan(
         for (int i = 0; i < warnings.size(); i++) {
             LiftPatchWarning w = warnings.get(i);
             sb.append(i > 0 ? ",\n    " : "\n    ").append("{ \"code\": ").append(quote(w.code().id()))
-                .append(", \"position\": ").append(position(w.position()))
+                .append(", \"position\": ").append(position(w.range()))
                 .append(", \"operationIndex\": ")
                 .append(w.operationIndex() == 0 ? "null" : w.operationIndex()).append(" }");
         }
@@ -209,7 +209,7 @@ public record Plan(
     private static String operation(Operation o) {
         StringBuilder sb = new StringBuilder("    {");
         sb.append(" \"index\": ").append(o.index());
-        sb.append(", \"position\": ").append(position(o.position()));
+        sb.append(", \"position\": ").append(position(o.range()));
         sb.append(", \"command\": ").append(quote(o.command()));
         sb.append(", \"verb\": ").append(quote(o.verb()));
         if (o.multiplicity() != null) {
@@ -234,7 +234,7 @@ public record Plan(
         } else {
             sb.append("{ \"code\": ").append(quote(o.error().code().id()))
                 .append(", \"message\": ").append(quote(o.error().message()))
-                .append(", \"position\": ").append(position(o.error().position())).append(" }");
+                .append(", \"position\": ").append(position(o.error().range())).append(" }");
         }
         return sb.append(" }").toString();
     }
@@ -299,11 +299,11 @@ public record Plan(
             + " }";
     }
 
-    private static String position(fr.cnrs.lacito.liftpatchbox.error.SourcePosition p) {
+    private static String position(fr.cnrs.lacito.liftpatchbox.error.SourceRange p) {
         if (p == null || !p.isKnown()) {
             return "null";
         }
-        return "{ \"line\": " + p.line() + ", \"column\": " + p.column() + " }";
+        return "{ \"line\": " + p.startLine() + ", \"column\": " + p.startColumn() + " }";
     }
 
     private static String quote(String s) {

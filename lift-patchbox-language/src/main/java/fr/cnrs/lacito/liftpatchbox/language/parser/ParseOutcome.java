@@ -25,12 +25,11 @@ import java.util.List;
 public record ParseOutcome(SourceScript script, List<LiftPatchError> errors) {
 
     /**
-     * The order errors are reported in: errors with no position first, then by
-     * line, then by column.
+     * The order errors are reported in: errors with no range first, then by where
+     * they start in the text.
      */
     public static final Comparator<LiftPatchError> BY_POSITION = Comparator
-        .comparingInt((LiftPatchError e) -> e.position().line())
-        .thenComparingInt(e -> e.position().column());
+        .comparingInt((LiftPatchError e) -> e.range().startOffset());
 
     /**
      * Canonical constructor, sorting the errors by source position. The sort is

@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 
 /**
@@ -26,7 +26,7 @@ public sealed interface Directive extends Item
      *
      * @return the position
      */
-    SourcePosition position();
+    SourceRange range();
 
     /**
      * The keyword of the directive, which plan mode reports as the operation's verb.
@@ -74,9 +74,9 @@ public sealed interface Directive extends Item
      *
      * @param kind     the language kind bound
      * @param language the language code
-     * @param position where the directive was written
+     * @param range    where the directive was written
      */
-    record LanguageDefault(LanguageKind kind, String language, SourcePosition position)
+    record LanguageDefault(LanguageKind kind, String language, SourceRange range)
         implements Directive {
 
         @Override
@@ -100,9 +100,9 @@ public sealed interface Directive extends Item
      *
      * @param kind     the language kind created
      * @param language the language code
-     * @param position where the directive was written
+     * @param range    where the directive was written
      */
-    record LanguageCreate(LanguageKind kind, String language, SourcePosition position)
+    record LanguageCreate(LanguageKind kind, String language, SourceRange range)
         implements Directive {
 
         @Override
@@ -121,9 +121,9 @@ public sealed interface Directive extends Item
      *
      * @param kind     the language kind
      * @param language the language code
-     * @param position where the directive was written
+     * @param range    where the directive was written
      */
-    record LanguageDelete(LanguageKind kind, String language, SourcePosition position)
+    record LanguageDelete(LanguageKind kind, String language, SourceRange range)
         implements Directive {
 
         @Override
@@ -145,9 +145,9 @@ public sealed interface Directive extends Item
      * {@code feature-set-create "name"}.
      *
      * @param name     the id of the new feature set
-     * @param position where the directive was written
+     * @param range    where the directive was written
      */
-    record FeatureSetCreate(String name, SourcePosition position) implements Directive {
+    record FeatureSetCreate(String name, SourceRange range) implements Directive {
 
         @Override
         public String keyword() {
@@ -164,9 +164,9 @@ public sealed interface Directive extends Item
      * {@code feature-set-delete "name"}.
      *
      * @param name     the id of the feature set
-     * @param position where the directive was written
+     * @param range    where the directive was written
      */
-    record FeatureSetDelete(String name, SourcePosition position) implements Directive {
+    record FeatureSetDelete(String name, SourceRange range) implements Directive {
 
         @Override
         public String keyword() {
@@ -184,9 +184,9 @@ public sealed interface Directive extends Item
      *
      * @param name     the current id of the feature set
      * @param newName  its new id
-     * @param position where the directive was written
+     * @param range    where the directive was written
      */
-    record FeatureSetRename(String name, String newName, SourcePosition position)
+    record FeatureSetRename(String name, String newName, SourceRange range)
         implements Directive {
 
         @Override
@@ -205,9 +205,9 @@ public sealed interface Directive extends Item
      *
      * @param name       the id of the new feature
      * @param featureSet the feature set it is created in
-     * @param position   where the directive was written
+     * @param range      where the directive was written
      */
-    record FeatureCreate(String name, String featureSet, SourcePosition position)
+    record FeatureCreate(String name, String featureSet, SourceRange range)
         implements Directive {
 
         @Override
@@ -226,9 +226,9 @@ public sealed interface Directive extends Item
      *
      * @param name       the id of the feature
      * @param featureSet the feature set it belongs to
-     * @param position   where the directive was written
+     * @param range      where the directive was written
      */
-    record FeatureDelete(String name, String featureSet, SourcePosition position)
+    record FeatureDelete(String name, String featureSet, SourceRange range)
         implements Directive {
 
         @Override
@@ -248,9 +248,9 @@ public sealed interface Directive extends Item
      * @param name       the current id of the feature
      * @param featureSet the feature set it belongs to
      * @param newName    its new id
-     * @param position   where the directive was written
+     * @param range      where the directive was written
      */
-    record FeatureRename(String name, String featureSet, String newName, SourcePosition position)
+    record FeatureRename(String name, String featureSet, String newName, SourceRange range)
         implements Directive {
 
         @Override
@@ -276,11 +276,11 @@ public sealed interface Directive extends Item
      * @param kind     field or trait
      * @param name     the name of the new definition
      * @param model    the data model as written, or {@code null} for the default of the kind
-     * @param range    the feature set of an option model, or {@code null}
-     * @param position where the directive was written
+     * @param optionRange the feature set of an option model, or {@code null}
+     * @param range       where the directive was written
      */
     record DefinitionCreate(
-        DefinitionKind kind, String name, String model, String range, SourcePosition position
+        DefinitionKind kind, String name, String model, String optionRange, SourceRange range
     ) implements Directive {
 
         @Override
@@ -292,7 +292,7 @@ public sealed interface Directive extends Item
         public String toString() {
             return keyword() + " " + quote(name)
                 + (model == null ? "" : " model = " + model)
-                + (range == null ? "" : " range = " + quote(range));
+                + (optionRange == null ? "" : " range = " + quote(optionRange));
         }
     }
 
@@ -301,9 +301,9 @@ public sealed interface Directive extends Item
      *
      * @param kind     field or trait
      * @param name     the name of the definition
-     * @param position where the directive was written
+     * @param range    where the directive was written
      */
-    record DefinitionDelete(DefinitionKind kind, String name, SourcePosition position)
+    record DefinitionDelete(DefinitionKind kind, String name, SourceRange range)
         implements Directive {
 
         @Override

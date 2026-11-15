@@ -27,7 +27,7 @@ import fr.cnrs.lacito.liftpatchbox.ast.Value;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -60,14 +60,17 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
     private static final Logger LOGGER = Logger.getLogger(RefScriptVisitor.class.getName());
 
     private final String source;
+    private final TextIndex index;
 
     /**
      * A visitor for a script read from the named source.
      *
      * @param source the source name, used in diagnostics and plan documents
+     * @param index  the lines and offsets of the text parsed, for the ranges
      */
-    public RefScriptVisitor(String source) {
+    public RefScriptVisitor(String source, TextIndex index) {
         this.source = source;
+        this.index = index;
     }
 
     /** Where errors are recorded while building, or {@code null} to throw at the first. */
@@ -170,7 +173,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             attributes.put(text(a.anyName()), string(a.string()));
         }
         String version = ctx.version().INT(0).getText() + "." + ctx.version().INT(1).getText();
-        return new Pragma(version, attributes, position(ctx));
+        return new Pragma(version, attributes, range(ctx));
     }
 
     /**
@@ -195,7 +198,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             LiftPatchRefParser.LanguageDirectiveContext l = ctx.languageDirective();
             LanguageKind kind = l.langKind().OBJECT() != null ? LanguageKind.OBJECT : LanguageKind.META;
             return DirectiveBuilder.build(l.getStart().getText(), kind,
-                List.of(string(l.string())), null, false, position(ctx));
+                List.of(string(l.string())), null, false, range(ctx));
         }
         LiftPatchRefParser.DeclarationContext d = ctx.declaration();
         List<String> strings = new ArrayList<>();
@@ -204,7 +207,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
         }
         return DirectiveBuilder.build(d.getStart().getText(), null, strings,
             d.dataModel() == null ? null : d.dataModel().getText(), d.RANGE() != null,
-            position(ctx));
+            range(ctx));
     }
 
     // ===================================================================
@@ -218,7 +221,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
         for (LiftPatchRefParser.ItemContext ic : ctx.item()) {
             addItem(body, ic);
         }
-        return new Block(header, body, position(ctx));
+        return new Block(header, body, range(ctx));
     }
 
     private BlockHeader buildHeader(LiftPatchRefParser.BlockHeaderContext ctx) {
@@ -235,7 +238,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             return visitWithHeader(ctx.withHeader());
         }
         String label = ctx.labelBinding() == null ? null : labelName(ctx.labelBinding());
-        return new BlockHeader.Selector(visitChain(ctx.chain()), label, position(ctx));
+        return new BlockHeader.Selector(visitChain(ctx.chain()), label, range(ctx));
     }
 
     @Override
@@ -246,7 +249,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
                 b.langKind().OBJECT() != null ? LanguageKind.OBJECT : LanguageKind.META;
             bindings.put(kind, string(b.string()));
         }
-        return new BlockHeader.With(bindings, position(ctx));
+        return new BlockHeader.With(bindings, range(ctx));
     }
 
     // ===================================================================
@@ -292,7 +295,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             ctx.atClause() == null ? null : visitAtClause(ctx.atClause()),
             ctx.labelBinding() == null ? null : labelName(ctx.labelBinding()),
             sourceText(ctx),
-            position(ctx));
+            range(ctx));
     }
 
     @Override
@@ -303,7 +306,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             ctx.atClause() == null ? null : visitAtClause(ctx.atClause()),
             ctx.labelBinding() == null ? null : labelName(ctx.labelBinding()),
             sourceText(ctx),
-            position(ctx));
+            range(ctx));
     }
 
     @Override
@@ -314,14 +317,14 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             throw syntaxError(
                 "`ensure` takes a selector between square brackets, not an initializer list; "
                     + "a command that creates a component when it is missing is spelled `upsert`",
-                position(target));
+                range(target));
         }
         return new Command.Ensure(
             visitStep(target.step()),
             ctx.chain() == null ? null : visitChain(ctx.chain()),
             ctx.labelBinding() == null ? null : labelName(ctx.labelBinding()),
             sourceText(ctx),
-            position(ctx));
+            range(ctx));
     }
 
     @Override
@@ -331,7 +334,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             target,
             ctx.chain() == null ? null : visitChain(ctx.chain()),
             sourceText(ctx),
-            position(ctx));
+            range(ctx));
     }
 
     @Override
@@ -340,7 +343,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
         if (ctx.atClause() == null) {
             // `move` is the one command with no sensible default position, so a
             // move written without one has no defined meaning (Part 2, section 8.5).
-            throw syntaxError("`move` requires an `at` clause", position(ctx));
+            throw syntaxError("`move` requires an `at` clause", range(ctx));
         }
         return new Command.Move(
             visitStep(ctx.step()),
@@ -348,7 +351,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             chains.size() > 1 ? visitChain(chains.get(1)) : null,
             visitAtClause(ctx.atClause()),
             sourceText(ctx),
-            position(ctx));
+            range(ctx));
     }
 
     @Override
@@ -357,7 +360,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             assignments(ctx.assignment()),
             propertyTarget(ctx.chain(), ctx.multiplicity()),
             sourceText(ctx),
-            position(ctx));
+            range(ctx));
     }
 
     @Override
@@ -366,7 +369,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             assignments(ctx.assignment()),
             propertyTarget(ctx.chain(), ctx.multiplicity()),
             sourceText(ctx),
-            position(ctx));
+            range(ctx));
     }
 
     @Override
@@ -379,14 +382,14 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             properties,
             propertyTarget(ctx.chain(), ctx.multiplicity()),
             sourceText(ctx),
-            position(ctx));
+            range(ctx));
     }
 
     private List<Assignment> assignments(List<LiftPatchRefParser.AssignmentContext> ctxs) {
         List<Assignment> out = new ArrayList<>();
         for (LiftPatchRefParser.AssignmentContext a : ctxs) {
             out.add(new Assignment(
-                visitPropertyRef(a.propertyRef()), buildValue(a.value()), position(a)));
+                visitPropertyRef(a.propertyRef()), buildValue(a.value()), range(a)));
         }
         return out;
     }
@@ -429,7 +432,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             PropertyRef property = visitPropertyRef(i.propertyRef());
             Value value = buildValue(i.value());
             Predicate predicate =
-                pseudoPredicate(property, Operator.EQ, value, position(i));
+                pseudoPredicate(property, Operator.EQ, value, range(i));
             if (predicate instanceof Predicate.HasGloss) {
                 // `has-gloss` is written like an assignment and is a matching
                 // condition: it is meaningful when looking for an existing entry,
@@ -438,9 +441,9 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
                 initializers.add(new Initializer.Condition(predicate));
                 continue;
             }
-            initializers.add(new Initializer.Assignment(property, value, position(i)));
+            initializers.add(new Initializer.Assignment(property, value, range(i)));
         }
-        return new Constructor(text(ctx.componentType()), initializers, position(ctx));
+        return new Constructor(text(ctx.componentType()), initializers, range(ctx));
     }
 
     // ===================================================================
@@ -462,7 +465,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
 
     @Override
     public Step visitStep(LiftPatchRefParser.StepContext ctx) {
-        SourcePosition pos = position(ctx);
+        SourceRange pos = range(ctx);
         if (ctx.labelRef() != null) {
             return new Step.Label(labelName(ctx.labelRef()), null, pos);
         }
@@ -497,7 +500,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
      * @return the predicate
      */
     public Predicate buildPredicate(LiftPatchRefParser.PredicateContext ctx) {
-        SourcePosition pos = position(ctx);
+        SourceRange pos = range(ctx);
         if (ctx.hasPredicate() != null) {
             return visitHasPredicate(ctx.hasPredicate());
         }
@@ -514,7 +517,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
     }
 
     private Predicate pseudoPredicate(
-        PropertyRef property, Operator operator, Value value, SourcePosition pos
+        PropertyRef property, Operator operator, Value value, SourceRange pos
     ) {
         if (operator != Operator.EQ) {
             return new Predicate.Comparison(property, operator, value, pos);
@@ -551,19 +554,19 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
 
     @Override
     public Predicate.Has visitHasPredicate(LiftPatchRefParser.HasPredicateContext ctx) {
-        return new Predicate.Has(visitStep(ctx.step()), position(ctx));
+        return new Predicate.Has(visitStep(ctx.step()), range(ctx));
     }
 
     @Override
     public PropertyRef visitPropertyRef(LiftPatchRefParser.PropertyRefContext ctx) {
         String name = text(ctx.propertyName());
         if (ctx.ATSIGN() == null) {
-            return new PropertyRef(name, null, false, position(ctx));
+            return new PropertyRef(name, null, false, range(ctx));
         }
         if (ctx.STAR() != null) {
-            return new PropertyRef(name, null, true, position(ctx));
+            return new PropertyRef(name, null, true, range(ctx));
         }
-        return new PropertyRef(name, text(ctx.lang()), false, position(ctx));
+        return new PropertyRef(name, text(ctx.lang()), false, range(ctx));
     }
 
     // ===================================================================
@@ -577,7 +580,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
      * @return the value
      */
     public Value buildValue(LiftPatchRefParser.ValueContext ctx) {
-        SourcePosition pos = position(ctx);
+        SourceRange pos = range(ctx);
         if (ctx.string() != null) {
             return new Value.Str(string(ctx.string()), null, pos);
         }
@@ -601,9 +604,9 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
     public Value.Multitext visitMultitextLiteral(LiftPatchRefParser.MultitextLiteralContext ctx) {
         List<LangText> entries = new ArrayList<>();
         for (LiftPatchRefParser.LangTextContext lt : ctx.langText()) {
-            entries.add(new LangText(text(lt.lang()), string(lt.string()), position(lt)));
+            entries.add(new LangText(text(lt.lang()), string(lt.string()), range(lt)));
         }
-        return new Value.Multitext(entries, position(ctx));
+        return new Value.Multitext(entries, range(ctx));
     }
 
     // ===================================================================
@@ -613,7 +616,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
     @Override
     public AtClause visitAtClause(LiftPatchRefParser.AtClauseContext ctx) {
         LiftPatchRefParser.PositionContext p = ctx.position();
-        SourcePosition pos = position(ctx);
+        SourceRange pos = range(ctx);
         if (p.BEGINNING() != null) {
             return new AtClause(AtClause.Kind.BEGINNING, null, null, pos);
         }
@@ -649,7 +652,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
         }
         return switch (step) {
             case Step.Component c -> c.withMultiplicity(m);
-            case Step.Label l -> new Step.Label(l.name(), m, l.position());
+            case Step.Label l -> new Step.Label(l.name(), m, l.range());
         };
     }
 
@@ -657,12 +660,20 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
     // Token helpers
     // ===================================================================
 
-    private static SourcePosition position(ParserRuleContext ctx) {
-        return position(ctx.getStart());
+    /** The range of a parsed construct in the document. */
+    private SourceRange range(ParserRuleContext ctx) {
+        Token start = ctx.getStart();
+        Token stop = ctx.getStop();
+        int from = start.getStartIndex();
+        int to = stop == null || stop.getStopIndex() < from ? from : stop.getStopIndex() + 1;
+        return index.range(index.utf16(from), index.utf16(to));
     }
 
-    private static SourcePosition position(Token token) {
-        return new SourcePosition(token.getLine(), token.getCharPositionInLine() + 1);
+    /** The range of a token in the document. */
+    private SourceRange range(Token token) {
+        int from = token.getStartIndex();
+        int to = token.getStopIndex() < from ? from : token.getStopIndex() + 1;
+        return index.range(index.utf16(from), index.utf16(to));
     }
 
     private static String text(ParserRuleContext ctx) {
@@ -671,7 +682,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
 
     private String string(LiftPatchRefParser.StringContext ctx) {
         TerminalNode node = ctx.STRING_DQ() != null ? ctx.STRING_DQ() : ctx.STRING_SQ();
-        return Literals.unquote(node.getText(), position(node.getSymbol()));
+        return Literals.unquote(node.getText(), range(node.getSymbol()));
     }
 
     /**
@@ -685,7 +696,7 @@ public final class RefScriptVisitor extends LiftPatchRefBaseVisitor<Object> {
             .trim();
     }
 
-    private static LiftPatchException syntaxError(String message, SourcePosition position) {
+    private static LiftPatchException syntaxError(String message, SourceRange position) {
         return new LiftPatchException(
             LiftPatchError.of(ModelErrorCode.SYNTAX_ERROR, message, position));
     }

@@ -55,7 +55,7 @@ class ParserSmokeTest {
                 assertInstanceOf(Directive.DefinitionCreate.class, ds.get(8));
             assertEquals(Directive.DefinitionKind.TRAIT, trait.kind());
             assertEquals("option-collection", trait.model());
-            assertEquals("semantic-domain", trait.range());
+            assertEquals("semantic-domain", trait.optionRange());
             Directive.DefinitionDelete field = assertInstanceOf(Directive.DefinitionDelete.class, ds.get(9));
             assertEquals(Directive.DefinitionKind.FIELD, field.kind());
             assertEquals("trait-delete", ds.get(10).keyword());

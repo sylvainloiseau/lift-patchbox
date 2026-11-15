@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 
 /**
  * One condition inside a selector. The predicates of a list are combined by
@@ -20,7 +20,7 @@ public sealed interface Predicate
      *
      * @return the source position
      */
-    SourcePosition position();
+    SourceRange range();
 
     /**
      * {@code p = V}, {@code p != V}, {@code p ~ V} or {@code p ~i V}.
@@ -28,9 +28,9 @@ public sealed interface Predicate
      * @param property the property compared
      * @param operator the comparison operator
      * @param value    the value compared against
-     * @param position where the predicate was written
+     * @param range    where the predicate was written
      */
-    record Comparison(PropertyRef property, Operator operator, Value value, SourcePosition position)
+    record Comparison(PropertyRef property, Operator operator, Value value, SourceRange range)
         implements Predicate {
 
         @Override
@@ -44,9 +44,9 @@ public sealed interface Predicate
      *
      * @param property the property asked about
      * @param absent   {@code true} for {@code absent(p)}, {@code false} for {@code exists(p)}
-     * @param position where the predicate was written
+     * @param range    where the predicate was written
      */
-    record Existence(PropertyRef property, boolean absent, SourcePosition position)
+    record Existence(PropertyRef property, boolean absent, SourceRange range)
         implements Predicate {
 
         @Override
@@ -61,9 +61,9 @@ public sealed interface Predicate
      * nested and repeated.
      *
      * @param step     the child step that must be matched
-     * @param position where the predicate was written
+     * @param range    where the predicate was written
      */
-    record Has(Step step, SourcePosition position) implements Predicate {
+    record Has(Step step, SourceRange range) implements Predicate {
 
         @Override
         public String toString() {
@@ -76,9 +76,9 @@ public sealed interface Predicate
      * and {@code sense} only, and forbidden in a filtering selector.
      *
      * @param id       the identifier
-     * @param position where the predicate was written
+     * @param range    where the predicate was written
      */
-    record Id(String id, SourcePosition position) implements Predicate {
+    record Id(String id, SourceRange range) implements Predicate {
 
         @Override
         public String toString() {
@@ -91,9 +91,9 @@ public sealed interface Predicate
      * written together with a qualified {@code form}.
      *
      * @param value    the homophone number, as written
-     * @param position where the predicate was written
+     * @param range    where the predicate was written
      */
-    record Hn(long value, SourcePosition position) implements Predicate {
+    record Hn(long value, SourceRange range) implements Predicate {
 
         @Override
         public String toString() {
@@ -107,9 +107,9 @@ public sealed interface Predicate
      *
      * @param language the meta language code, or {@code null} for the default one
      * @param value    the gloss looked for
-     * @param position where the predicate was written
+     * @param range    where the predicate was written
      */
-    record HasGloss(String language, String value, SourcePosition position) implements Predicate {
+    record HasGloss(String language, String value, SourceRange range) implements Predicate {
 
         @Override
         public String toString() {
@@ -125,9 +125,9 @@ public sealed interface Predicate
      * {@code DUPLICATE_SELECTOR} rather than a syntax error.</p>
      *
      * @param value    the 1-based position
-     * @param position where the predicate was written
+     * @param range    where the predicate was written
      */
-    record Index(long value, SourcePosition position) implements Predicate {
+    record Index(long value, SourceRange range) implements Predicate {
 
         @Override
         public String toString() {

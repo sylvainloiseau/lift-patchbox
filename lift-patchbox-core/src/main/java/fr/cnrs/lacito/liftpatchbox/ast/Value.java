@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 
 /**
  * The right-hand side of an assignment, of an initializer or of a predicate.
@@ -18,7 +18,7 @@ public sealed interface Value
      *
      * @return the source position
      */
-    SourcePosition position();
+    SourceRange range();
 
     /**
      * A quoted string, possibly carrying the language suffix the concise syntax
@@ -26,9 +26,9 @@ public sealed interface Value
      *
      * @param text     the string content, with escapes already resolved
      * @param language the language written after the string, or {@code null}
-     * @param position where the value was written
+     * @param range    where the value was written
      */
-    record Str(String text, String language, SourcePosition position) implements Value {
+    record Str(String text, String language, SourceRange range) implements Value {
 
         /**
          * An unqualified string at an unknown position.
@@ -37,7 +37,7 @@ public sealed interface Value
          * @return the value
          */
         public static Str of(String text) {
-            return new Str(text, null, SourcePosition.UNKNOWN);
+            return new Str(text, null, SourceRange.UNKNOWN);
         }
 
         @Override
@@ -51,9 +51,9 @@ public sealed interface Value
      * {@code hn} pseudo-property accept.
      *
      * @param value    the integer
-     * @param position where the value was written
+     * @param range    where the value was written
      */
-    record Num(long value, SourcePosition position) implements Value {
+    record Num(long value, SourceRange range) implements Value {
 
         /**
          * An integer at an unknown position.
@@ -62,7 +62,7 @@ public sealed interface Value
          * @return the value
          */
         public static Num of(long value) {
-            return new Num(value, SourcePosition.UNKNOWN);
+            return new Num(value, SourceRange.UNKNOWN);
         }
 
         @Override
@@ -76,15 +76,15 @@ public sealed interface Value
      * for the sequence of the corresponding single-qualifier assignments.
      *
      * @param entries  the qualified values, in the order written
-     * @param position where the literal was written
+     * @param range    where the literal was written
      */
-    record Multitext(java.util.List<LangText> entries, SourcePosition position) implements Value {
+    record Multitext(java.util.List<LangText> entries, SourceRange range) implements Value {
 
         /**
          * Canonical constructor, taking an unmodifiable copy of the entries.
          *
          * @param entries  the qualified values
-         * @param position where the literal was written
+         * @param range    where the literal was written
          */
         public Multitext {
             entries = java.util.List.copyOf(entries);
@@ -112,8 +112,8 @@ public sealed interface Value
     record ChainRef(Chain chain) implements Value {
 
         @Override
-        public SourcePosition position() {
-            return chain.position();
+        public SourceRange range() {
+            return chain.range();
         }
 
         @Override
@@ -127,9 +127,9 @@ public sealed interface Value
      * script has just created.
      *
      * @param name     the label name, without the leading {@code $}
-     * @param position where the label was written
+     * @param range    where the label was written
      */
-    record LabelRef(String name, SourcePosition position) implements Value {
+    record LabelRef(String name, SourceRange range) implements Value {
 
         /**
          * A label reference at an unknown position.
@@ -138,7 +138,7 @@ public sealed interface Value
          * @return the value
          */
         public static LabelRef of(String name) {
-            return new LabelRef(name, SourcePosition.UNKNOWN);
+            return new LabelRef(name, SourceRange.UNKNOWN);
         }
 
         @Override

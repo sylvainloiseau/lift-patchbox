@@ -30,7 +30,7 @@ import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.metamodel.ComponentKind;
 import fr.cnrs.lacito.liftpatchbox.metamodel.ComponentTypeDef;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
@@ -152,6 +152,7 @@ public final class ShortScriptParser {
      */
     public SourceScript parse(String document, List<LiftPatchError> errors) {
         ShortLinePreprocessor.Scan scan = new ShortLinePreprocessor(source, errors).scan(document);
+        index = scan.index();
         operationCounter = 0;
 
         Pragma pragma = scan.pragmaLine() == null
@@ -196,7 +197,7 @@ public final class ShortScriptParser {
                     // Recorded, and the line is kept out of the script under the
                     // nearest open level, since its parent is unknown.
                     errors.add(new LiftPatchError(ModelErrorCode.SYNTAX_ERROR,
-                        "this indentation matches no open block level", line.position(),
+                        "this indentation matches no open block level", line.range(),
                         operationCounter + 1));
                     misaligned = true;
                 }
@@ -293,7 +294,11 @@ public final class ShortScriptParser {
             for (Object child : f.body) {
                 addItem(body, child);
             }
-            items.add(new Block(f.header, body, f.header.position()));
+            SourceRange range = f.header.range();
+            for (Item child : body) {
+                range = range.cover(child.range());
+            }
+            items.add(new Block(f.header, body, range));
             return;
         }
         items.add((Item) o);
@@ -357,7 +362,7 @@ public final class ShortScriptParser {
     private Pragma parsePragma(ShortLinePreprocessor.Recognized line) {
         Matcher m = PRAGMA.matcher(line.body().strip());
         if (!m.matches()) {
-            throw error(ModelErrorCode.SYNTAX_ERROR, "malformed version pragma", line.position(), 0);
+            throw error(ModelErrorCode.SYNTAX_ERROR, "malformed version pragma", line.range(), 0);
         }
         Map<String, String> attributes = new LinkedHashMap<>();
         Matcher a = PRAGMA_ATTRIBUTE.matcher(m.group(2));
@@ -368,11 +373,11 @@ public final class ShortScriptParser {
                 attributes.put(a.group(3), a.group(4));
             }
         }
-        return new Pragma(m.group(1), attributes, line.position());
+        return new Pragma(m.group(1), attributes, line.range());
     }
 
     private Directive parseDirective(ShortLinePreprocessor.Recognized line) {
-        LiftPatchShortParser p = parserFor(line.body(), line.lineNumber(), line.bodyColumn());
+        LiftPatchShortParser p = parserFor(Fragment.at(line, line.bodyColumn(), line.body()));
         LiftPatchShortParser.DirectiveOnlyContext ctx = p.directiveOnly();
         checkErrors(p);
         if (ctx.languageDirective() != null) {
@@ -380,7 +385,7 @@ public final class ShortScriptParser {
             LanguageKind kind =
                 l.langKind().OBJECT() != null ? LanguageKind.OBJECT : LanguageKind.META;
             return DirectiveBuilder.build(l.getStart().getText(), kind,
-                List.of(string(l.string())), null, false, line.position());
+                List.of(string(l.string())), null, false, line.range());
         }
         LiftPatchShortParser.DeclarationContext d = ctx.declaration();
         List<String> strings = new ArrayList<>();
@@ -389,14 +394,14 @@ public final class ShortScriptParser {
         }
         return DirectiveBuilder.build(d.getStart().getText(), null, strings,
             d.dataModel() == null ? null : d.dataModel().getText(), d.RANGE() != null,
-            line.position());
+            line.range());
     }
 
     private Object buildCommand(ShortLinePreprocessor.Recognized line) {
         List<TopLevelSplitter.Token> tokens =
             TopLevelSplitter.split(line.body(), line.bodyColumn());
         if (tokens.isEmpty()) {
-            throw error(ModelErrorCode.SYNTAX_ERROR, "a command needs an argument", line.position(),
+            throw error(ModelErrorCode.SYNTAX_ERROR, "a command needs an argument", line.range(),
                 operationCounter + 1);
         }
         int tailStart = tokens.size();
@@ -436,11 +441,11 @@ public final class ShortScriptParser {
             // the line does not parse (Part 3, section 2.1).
             throw error(ModelErrorCode.MULTIPLICITY_NOT_ALLOWED,
                 "`" + line.verb().keyword() + "` operates on exactly one component",
-                line.position(), operationCounter + 1);
+                line.range(), operationCounter + 1);
         }
         if (main.isEmpty()) {
             throw error(ModelErrorCode.SYNTAX_ERROR, "a `" + line.verb().code()
-                + "` command needs a path or a constructor", line.position(),
+                + "` command needs a path or a constructor", line.range(),
                 operationCounter + 1);
         }
         TopLevelSplitter.Token last = main.get(main.size() - 1);
@@ -450,7 +455,7 @@ public final class ShortScriptParser {
             if (main.size() > 1) {
                 throw error(ModelErrorCode.SYNTAX_ERROR,
                     "a path-only `" + line.verb().code() + "` command takes one path",
-                    position(line, last), operationCounter + 1);
+                    range(line, last), operationCounter + 1);
             }
             return buildPathOnly(line, last, tail, multiplicity);
         }
@@ -460,7 +465,7 @@ public final class ShortScriptParser {
             if (main.size() > 2) {
                 throw error(ModelErrorCode.SYNTAX_ERROR,
                     "a `" + line.verb().code() + "` command takes one parent path",
-                    position(line, main.get(0)), operationCounter + 1);
+                    range(line, main.get(0)), operationCounter + 1);
             }
             path = parsePath(main.get(0), line, startDepthOf(main.get(0)));
         }
@@ -470,10 +475,10 @@ public final class ShortScriptParser {
 
         if (line.verb() == Verb.CREATE) {
             return new Command.Create(constructor, parent, tail.at, tail.label,
-                line.rawText(), line.position());
+                line.rawText(), line.range());
         }
         return new Command.Upsert(constructor, parent, tail.at, tail.label,
-            line.rawText(), line.position());
+            line.rawText(), line.range());
     }
 
     /**
@@ -493,12 +498,12 @@ public final class ShortScriptParser {
                 throw error(SyntaxErrorCode.CONSTRUCTOR_REQUIRED,
                     "a path-only `c` creates the component its last step denotes, and can do so "
                         + "only when that step is an abbreviated one; write the constructor",
-                    position(line, token), operationCounter + 1);
+                    range(line, token), operationCounter + 1);
             }
             Constructor constructor = path.constructorFor(path.steps.size() - 1);
             Chain parent = path.steps.size() == 1 ? null : path.toChainUpTo(path.steps.size() - 1);
             return new Command.Create(constructor, parent, tail.at, tail.label,
-                line.rawText(), line.position());
+                line.rawText(), line.range());
         }
 
         // `p /path`: every step must be an abbreviated one, because a selector
@@ -509,7 +514,7 @@ public final class ShortScriptParser {
                 throw error(SyntaxErrorCode.CONSTRUCTOR_REQUIRED,
                     "every step of a path-only `p` is upserted, so every step must be an "
                         + "abbreviated one; write the constructor",
-                    position(line, token), operationCounter + 1);
+                    range(line, token), operationCounter + 1);
             }
         }
         return buildUpsertIdiom(line, path, tail);
@@ -532,7 +537,7 @@ public final class ShortScriptParser {
             // A single abbreviated step: an entry with nothing to tell the
             // homophones apart. Legal to write, refused by the validator.
             return new Command.Upsert(path.constructorFor(0), null, tail.at, tail.label,
-                line.rawText(), line.position());
+                line.rawText(), line.range());
         }
 
         List<Frame> frames = new ArrayList<>();
@@ -543,11 +548,11 @@ public final class ShortScriptParser {
                     path.languages.get(1), path.values.get(1), path.positions.get(1));
                 List<Initializer> initializers = new ArrayList<>(c.initializers());
                 initializers.add(new Initializer.Condition(hasGloss));
-                c = new Constructor(c.componentType(), initializers, c.position());
+                c = new Constructor(c.componentType(), initializers, c.range());
             }
             Command.Upsert upsert = new Command.Upsert(
                 c, null, i == n - 1 ? tail.at : null, i == n - 1 ? tail.label : null,
-                line.rawText(), line.position());
+                line.rawText(), line.range());
             frames.add(new Frame(-1, LiftPatch.anchorHeader(upsert)));
         }
         for (int i = 0; i < n - 1; i++) {
@@ -569,12 +574,12 @@ public final class ShortScriptParser {
         if (main.isEmpty()) {
             throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command needs a target step",
-                line.position(), operationCounter + 1);
+                line.range(), operationCounter + 1);
         }
         if (main.size() > 2) {
             throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command takes a parent path and one target step",
-                position(line, main.get(0)), operationCounter + 1);
+                range(line, main.get(0)), operationCounter + 1);
         }
         ParsedPath parentPath = main.size() == 2
             ? parsePath(main.get(0), line, startDepthOf(main.get(0)))
@@ -586,13 +591,13 @@ public final class ShortScriptParser {
             throw error(SyntaxErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
                 "the direct target of a `" + line.verb().code()
                     + "` is exactly one step, written after the parent path",
-                position(line, targetToken), operationCounter + 1);
+                range(line, targetToken), operationCounter + 1);
         }
         if (parentPath != null && targetPath.absolute) {
             throw error(ModelErrorCode.SYNTAX_ERROR,
                 "the root marker `/` may be written on a target step only when no parent path "
                     + "precedes it",
-                position(line, targetToken), operationCounter + 1);
+                range(line, targetToken), operationCounter + 1);
         }
         Step target = targetPath.steps.get(0);
         if (multiplicity != null) {
@@ -601,9 +606,9 @@ public final class ShortScriptParser {
         Chain parent = parentPath == null ? null : parentPath.toChain();
 
         if (line.verb() == Verb.DELETE) {
-            return new Command.Delete(target, parent, line.rawText(), line.position());
+            return new Command.Delete(target, parent, line.rawText(), line.range());
         }
-        return new Command.Ensure(target, parent, tail.label, line.rawText(), line.position());
+        return new Command.Ensure(target, parent, tail.label, line.rawText(), line.range());
     }
 
     // ===================================================================
@@ -618,7 +623,7 @@ public final class ShortScriptParser {
     ) {
         if (main.isEmpty()) {
             throw error(ModelErrorCode.SYNTAX_ERROR, "a `m` command needs a source",
-                line.position(), operationCounter + 1);
+                line.range(), operationCounter + 1);
         }
         ParsedPath sourcePath = main.size() >= 2
             ? parsePath(main.get(0), line, startDepthOf(main.get(0)))
@@ -629,7 +634,7 @@ public final class ShortScriptParser {
         if (targetPath.steps.size() != 1) {
             throw error(SyntaxErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
                 "the source of a `m` is exactly one step, written after the parent path",
-                position(line, targetToken), operationCounter + 1);
+                range(line, targetToken), operationCounter + 1);
         }
         Step target = targetPath.steps.get(0);
         if (multiplicity != null) {
@@ -639,7 +644,7 @@ public final class ShortScriptParser {
             && Metamodel.ENTRY.equals(c.componentType())) {
             throw error(ModelErrorCode.SYNTAX_ERROR,
                 "`m` cannot target an entry: the dictionary, not the script, orders the entry list",
-                position(line, targetToken), operationCounter + 1);
+                range(line, targetToken), operationCounter + 1);
         }
         return new Command.Move(
             target,
@@ -647,7 +652,7 @@ public final class ShortScriptParser {
             tail.destination,
             tail.at,
             line.rawText(),
-            line.position());
+            line.range());
     }
 
     // ===================================================================
@@ -663,18 +668,18 @@ public final class ShortScriptParser {
         if (main.isEmpty()) {
             throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command needs a parenthesized property list",
-                line.position(), operationCounter + 1);
+                line.range(), operationCounter + 1);
         }
         TopLevelSplitter.Token last = main.get(main.size() - 1);
         if (!last.text().startsWith("(")) {
             throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command ends with a parenthesized property list",
-                position(line, last), operationCounter + 1);
+                range(line, last), operationCounter + 1);
         }
         if (main.size() > 3) {
             throw error(ModelErrorCode.SYNTAX_ERROR,
                 "a `" + line.verb().code() + "` command takes a path and at most one further step",
-                position(line, main.get(0)), operationCounter + 1);
+                range(line, main.get(0)), operationCounter + 1);
         }
         Chain target = null;
         if (main.size() >= 2) {
@@ -690,7 +695,7 @@ public final class ShortScriptParser {
                 if (stepPath.steps.size() != 1) {
                     throw error(SyntaxErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
                         "the component a property command writes on is one step",
-                        position(line, stepToken), operationCounter + 1);
+                        range(line, stepToken), operationCounter + 1);
                 }
                 target = target.prepend(stepPath.steps.get(0), Axis.STRICT);
             }
@@ -701,7 +706,7 @@ public final class ShortScriptParser {
             }
         }
 
-        LiftPatchShortParser p = parserFor(last.text(), line.lineNumber(), last.column());
+        LiftPatchShortParser p = parserFor(Fragment.at(line, last.column(), last.text()));
         if (line.verb() == Verb.CLEAR) {
             LiftPatchShortParser.PropertyListOnlyContext ctx = p.propertyListOnly();
             checkErrors(p);
@@ -709,19 +714,19 @@ public final class ShortScriptParser {
             for (LiftPatchShortParser.PropertyRefContext pr : ctx.propertyRef()) {
                 properties.add(propertyRef(pr));
             }
-            return new Command.Clear(properties, target, line.rawText(), line.position());
+            return new Command.Clear(properties, target, line.rawText(), line.range());
         }
         LiftPatchShortParser.AssignListOnlyContext ctx = p.assignListOnly();
         checkErrors(p);
         List<Assignment> assignments = new ArrayList<>();
         for (LiftPatchShortParser.AssignmentContext a : ctx.assignment()) {
             assignments.add(new Assignment(
-                propertyRef(a.propertyRef()), shortValue(a.shortValue()), position(a)));
+                propertyRef(a.propertyRef()), shortValue(a.shortValue()), range(a)));
         }
         if (line.verb() == Verb.SET) {
-            return new Command.Set(assignments, target, line.rawText(), line.position());
+            return new Command.Set(assignments, target, line.rawText(), line.range());
         }
-        return new Command.Update(assignments, target, line.rawText(), line.position());
+        return new Command.Update(assignments, target, line.rawText(), line.range());
     }
 
     // ===================================================================
@@ -744,15 +749,7 @@ public final class ShortScriptParser {
         if (tokens.isEmpty()) {
             return Tail.EMPTY;
         }
-        StringBuilder sb = new StringBuilder();
-        for (TopLevelSplitter.Token t : tokens) {
-            if (!sb.isEmpty()) {
-                sb.append(' ');
-            }
-            sb.append(t.text());
-        }
-        int column = tokens.get(0).column();
-        LiftPatchShortParser p = parserFor(sb.toString(), line.lineNumber(), column);
+        LiftPatchShortParser p = parserFor(Fragment.joined(line, tokens));
         LiftPatchShortParser.TailOnlyContext ctx = p.tailOnly();
         checkErrors(p);
 
@@ -769,7 +766,7 @@ public final class ShortScriptParser {
 
     private AtClause atClause(LiftPatchShortParser.AtClauseContext ctx, ShortLinePreprocessor.Recognized line) {
         LiftPatchShortParser.PositionContext pos = ctx.position();
-        SourcePosition where = position(ctx);
+        SourceRange where = range(ctx);
         if (pos.BEGINNING() != null) {
             return new AtClause(AtClause.Kind.BEGINNING, null, null, where);
         }
@@ -820,7 +817,7 @@ public final class ShortScriptParser {
         private final List<String> properties = new ArrayList<>();
         private final List<String> values = new ArrayList<>();
         private final List<String> languages = new ArrayList<>();
-        private final List<SourcePosition> positions = new ArrayList<>();
+        private final List<SourceRange> positions = new ArrayList<>();
 
         ParsedPath(boolean absolute, boolean depthKnown) {
             this.absolute = absolute;
@@ -875,7 +872,7 @@ public final class ShortScriptParser {
         TopLevelSplitter.Token token, ShortLinePreprocessor.Recognized line,
         int startDepth, String parentTypeHint
     ) {
-        LiftPatchShortParser p = parserFor(token.text(), line.lineNumber(), token.column());
+        LiftPatchShortParser p = parserFor(Fragment.at(line, token.column(), token.text()));
         LiftPatchShortParser.PathOnlyContext ctx = p.pathOnly();
         checkErrors(p);
         return pathOf(ctx.path(), line, startDepth, parentTypeHint);
@@ -957,13 +954,13 @@ public final class ShortScriptParser {
         int depth = startDepth;
 
         if (rootLabel != null) {
-            path.steps.add(new Step.Label(rootLabel, null, position(ctx)));
+            path.steps.add(new Step.Label(rootLabel, null, range(ctx)));
             path.abbreviated.add(Boolean.FALSE);
             path.types.add(null);
             path.properties.add(null);
             path.values.add(null);
             path.languages.add(null);
-            path.positions.add(position(ctx));
+            path.positions.add(range(ctx));
             // Below a label the depth from the root is not written down, so no step
             // may be abbreviated (Part 3, section 6.1).
             depth = -1;
@@ -977,7 +974,7 @@ public final class ShortScriptParser {
             path.properties.add(r.property);
             path.values.add(r.value);
             path.languages.add(r.language);
-            path.positions.add(r.step.position());
+            path.positions.add(r.step.range());
             parentType = r.componentType;
             if (depth > 0) {
                 depth++;
@@ -1012,7 +1009,7 @@ public final class ShortScriptParser {
         String parentType,
         ShortLinePreprocessor.Recognized line
     ) {
-        SourcePosition where = position(ctx);
+        SourceRange where = range(ctx);
 
         if (ctx.labelRef() != null) {
             return new StepResult(
@@ -1113,7 +1110,7 @@ public final class ShortScriptParser {
     private Constructor parseConstructor(
         TopLevelSplitter.Token token, ShortLinePreprocessor.Recognized line, int depth
     ) {
-        LiftPatchShortParser p = parserFor(token.text(), line.lineNumber(), token.column());
+        LiftPatchShortParser p = parserFor(Fragment.at(line, token.column(), token.text()));
         LiftPatchShortParser.ConstructorOnlyContext ctx = p.constructorOnly();
         checkErrors(p);
         return constructor(ctx.constructor(), line);
@@ -1146,11 +1143,11 @@ public final class ShortScriptParser {
                     // `has-gloss` is written like an assignment and is a matching
                     // condition (Part 2, section 8.2.1).
                     initializers.add(new Initializer.Condition(new Predicate.HasGloss(
-                        property.language(), str.text(), position(init))));
+                        property.language(), str.text(), range(init))));
                     continue;
                 }
                 initializers.add(
-                    new Initializer.Assignment(property, value, position(init)));
+                    new Initializer.Assignment(property, value, range(init)));
                 continue;
             }
             // An unnamed argument: the properties of the type, in the order the
@@ -1161,25 +1158,25 @@ public final class ShortScriptParser {
                         ? "the component type `" + type + "` admits no unnamed initializer argument"
                         : "the component type `" + type + "` admits "
                             + unnamedMapping.size() + " unnamed initializer argument(s)",
-                    position(init), operationCounter + 1);
+                    range(init), operationCounter + 1);
             }
             Value value = shortValue(init.shortValue());
             String language = value instanceof Value.Str s ? s.language() : null;
             PropertyRef property = new PropertyRef(
-                unnamedMapping.get(unnamed), language, false, position(init));
+                unnamedMapping.get(unnamed), language, false, range(init));
             Value stripped = value instanceof Value.Str s
-                ? new Value.Str(s.text(), null, s.position())
+                ? new Value.Str(s.text(), null, s.range())
                 : value;
-            initializers.add(new Initializer.Assignment(property, stripped, position(init)));
+            initializers.add(new Initializer.Assignment(property, stripped, range(init)));
             unnamed++;
         }
-        return new Constructor(type, initializers, position(ctx));
+        return new Constructor(type, initializers, range(ctx));
     }
 
     private Predicate predicate(
         LiftPatchShortParser.PredicateContext ctx, ShortLinePreprocessor.Recognized line
     ) {
-        SourcePosition where = position(ctx);
+        SourceRange where = range(ctx);
         if (ctx.hasPredicate() != null) {
             return hasPredicate(ctx.hasPredicate(), line);
         }
@@ -1227,23 +1224,23 @@ public final class ShortScriptParser {
     ) {
         // A step inside a `has` predicate is a filtering step at any depth, and the
         // depth from the root is not written down there, so it may not be abbreviated.
-        return new Predicate.Has(buildStep(ctx.pathStep(), -1, null, line).step, position(ctx));
+        return new Predicate.Has(buildStep(ctx.pathStep(), -1, null, line).step, range(ctx));
     }
 
     private PropertyRef propertyRef(LiftPatchShortParser.PropertyRefContext ctx) {
         String code = ctx.propertyCode().getText();
         String name = ShortCodes.propertyName(code).orElse(code);
         if (ctx.ATSIGN() == null) {
-            return new PropertyRef(name, null, false, position(ctx));
+            return new PropertyRef(name, null, false, range(ctx));
         }
         if (ctx.STAR() != null) {
-            return new PropertyRef(name, null, true, position(ctx));
+            return new PropertyRef(name, null, true, range(ctx));
         }
-        return new PropertyRef(name, ctx.lang().getText(), false, position(ctx));
+        return new PropertyRef(name, ctx.lang().getText(), false, range(ctx));
     }
 
     private Value shortValue(LiftPatchShortParser.ShortValueContext ctx) {
-        SourcePosition where = position(ctx);
+        SourceRange where = range(ctx);
         if (ctx.string() != null) {
             String language = ctx.lang() == null ? null : ctx.lang().getText();
             return new Value.Str(string(ctx.string()), language, where);
@@ -1254,7 +1251,7 @@ public final class ShortScriptParser {
         if (ctx.multitextLiteral() != null) {
             List<LangText> entries = new ArrayList<>();
             for (LiftPatchShortParser.LangTextContext lt : ctx.multitextLiteral().langText()) {
-                entries.add(new LangText(lt.lang().getText(), string(lt.string()), position(lt)));
+                entries.add(new LangText(lt.lang().getText(), string(lt.string()), range(lt)));
             }
             return new Value.Multitext(entries, where);
         }
@@ -1275,16 +1272,90 @@ public final class ShortScriptParser {
     // ===================================================================
 
     /**
-     * A parser for one fragment of a command line. Its lexer starts at the line and
-     * column the fragment has in the document, so that every token, and so every
-     * position the command model and the error messages carry, is in the
-     * coordinates of the document rather than of the fragment.
+     * Part of a command line given to the ANTLR parser on its own, and where its characters
+     * are in the document: one piece of the line, or tokens of the line joined by single
+     * spaces. Its locator turns the indexes of the fragment's tokens into ranges of the
+     * document, so that every range the command model and the error messages carry is in
+     * the coordinates of the document rather than of the fragment.
+     *
+     * @param text       the text parsed
+     * @param textStarts the offsets in {@code text} where the pieces start, ascending
+     * @param docStarts  the offsets in the document of the same pieces
+     * @param lengths    the lengths of the pieces
      */
-    private LiftPatchShortParser parserFor(String text, int line, int column) {
-        LiftPatchShortLexer lexer = new LiftPatchShortLexer(CharStreams.fromString(text));
-        lexer.setLine(line);
-        lexer.setCharPositionInLine(column - 1);
-        CollectingErrorListener listener = new CollectingErrorListener();
+    private record Fragment(String text, int[] textStarts, int[] docStarts, int[] lengths) {
+
+        /** A piece of a line, starting at a 1-based column of that line. */
+        static Fragment at(ShortLinePreprocessor.Recognized line, int column, String text) {
+            return new Fragment(text, new int[] {0}, new int[] {line.lineStart() + column - 1},
+                new int[] {text.length()});
+        }
+
+        /** Tokens of a line, joined by single spaces. */
+        static Fragment joined(ShortLinePreprocessor.Recognized line, List<TopLevelSplitter.Token> tokens) {
+            StringBuilder sb = new StringBuilder();
+            int[] textStarts = new int[tokens.size()];
+            int[] docStarts = new int[tokens.size()];
+            int[] lengths = new int[tokens.size()];
+            for (int i = 0; i < tokens.size(); i++) {
+                TopLevelSplitter.Token t = tokens.get(i);
+                if (!sb.isEmpty()) {
+                    sb.append(' ');
+                }
+                textStarts[i] = sb.length();
+                docStarts[i] = line.lineStart() + t.column() - 1;
+                lengths[i] = t.text().length();
+                sb.append(t.text());
+            }
+            return new Fragment(sb.toString(), textStarts, docStarts, lengths);
+        }
+
+        /** The document offset of a character of the fragment (UTF-16 offset in the fragment). */
+        private int docStart(int offset) {
+            for (int i = 0; i < textStarts.length; i++) {
+                if (offset < textStarts[i] + lengths[i]) {
+                    return docStarts[i] + Math.max(0, offset - textStarts[i]);
+                }
+            }
+            int last = textStarts.length - 1;
+            return docStarts[last] + lengths[last];
+        }
+
+        /** The document offset just after the fragment's characters before {@code offset}. */
+        private int docEnd(int offset) {
+            for (int i = textStarts.length - 1; i >= 0; i--) {
+                if (offset > textStarts[i]) {
+                    return docStarts[i] + Math.min(lengths[i], offset - textStarts[i]);
+                }
+            }
+            return docStarts[0];
+        }
+
+        /** The UTF-16 offset in the fragment of a code-point index. */
+        private int utf16(int codePoints) {
+            int cp = Math.max(0, Math.min(codePoints, text.codePointCount(0, text.length())));
+            return text.offsetByCodePoints(0, cp);
+        }
+
+        SourceRange chars(TextIndex index, int start, int end) {
+            int s = docStart(utf16(start));
+            int e = end <= start ? s : docEnd(utf16(end));
+            return index.range(s, Math.max(s, e));
+        }
+    }
+
+    /** The lines and offsets of the document being parsed. */
+    private TextIndex index;
+
+    /** The fragment each lexer reads, to turn its tokens into ranges of the document. */
+    private final Map<org.antlr.v4.runtime.TokenSource, Fragment> fragments = new java.util.IdentityHashMap<>();
+
+    /** A parser for one fragment of a command line. */
+    private LiftPatchShortParser parserFor(Fragment fragment) {
+        LiftPatchShortLexer lexer = new LiftPatchShortLexer(CharStreams.fromString(fragment.text()));
+        fragments.put(lexer, fragment);
+        CollectingErrorListener listener = new CollectingErrorListener(
+            (start, end) -> fragment.chars(index, start, end));
         lexer.removeErrorListeners();
         lexer.addErrorListener(listener);
         LiftPatchShortParser parser = new LiftPatchShortParser(new CommonTokenStream(lexer));
@@ -1304,7 +1375,7 @@ public final class ShortScriptParser {
             List<LiftPatchError> errors = new ArrayList<>();
             for (LiftPatchError e : listener.errors()) {
                 errors.add(new LiftPatchError(
-                    e.code(), e.message(), e.position(), operationCounter + 1));
+                    e.code(), e.message(), e.range(), operationCounter + 1));
             }
             throw new LiftPatchException(errors);
         }
@@ -1314,37 +1385,48 @@ public final class ShortScriptParser {
     // Small helpers
     // ===================================================================
 
-    private static SourcePosition position(ParserRuleContext ctx) {
-        Token t = ctx.getStart();
-        return new SourcePosition(t.getLine(), t.getCharPositionInLine() + 1);
+    /** The range of a parsed construct in the document. */
+    private SourceRange range(ParserRuleContext ctx) {
+        Token start = ctx.getStart();
+        Token stop = ctx.getStop();
+        Fragment fragment = fragments.get(start.getTokenSource());
+        int from = start.getStartIndex();
+        int to = stop == null || stop.getStopIndex() < from ? from : stop.getStopIndex() + 1;
+        return fragment.chars(index, from, to);
     }
 
-    private static SourcePosition position(
-        ShortLinePreprocessor.Recognized line, TopLevelSplitter.Token token
-    ) {
-        return new SourcePosition(line.lineNumber(), token.column());
+    /** The range of a token in the document. */
+    private SourceRange range(Token token) {
+        Fragment fragment = fragments.get(token.getTokenSource());
+        int from = token.getStartIndex();
+        int to = token.getStopIndex() < from ? from : token.getStopIndex() + 1;
+        return fragment.chars(index, from, to);
+    }
+
+    /** The range of a top-level token of a command line. */
+    private SourceRange range(ShortLinePreprocessor.Recognized line, TopLevelSplitter.Token token) {
+        int start = line.lineStart() + token.column() - 1;
+        return index.range(start, start + token.text().length());
     }
 
     private static String anyName(LiftPatchShortParser.AnyNameContext ctx) {
         return ctx.getText();
     }
 
-    private static String string(LiftPatchShortParser.StringContext ctx) {
+    private String string(LiftPatchShortParser.StringContext ctx) {
         TerminalNode node = ctx.STRING_DQ() != null ? ctx.STRING_DQ() : ctx.STRING_SQ();
-        Token t = node.getSymbol();
-        return Literals.unquote(node.getText(),
-            new SourcePosition(t.getLine(), t.getCharPositionInLine() + 1));
+        return Literals.unquote(node.getText(), range(node.getSymbol()));
     }
 
     private static Step withMultiplicity(Step step, Multiplicity m) {
         return switch (step) {
             case Step.Component c -> c.withMultiplicity(m);
-            case Step.Label l -> new Step.Label(l.name(), m, l.position());
+            case Step.Label l -> new Step.Label(l.name(), m, l.range());
         };
     }
 
     private LiftPatchException error(
-        ErrorCode code, String message, SourcePosition position, int operationIndex
+        ErrorCode code, String message, SourceRange position, int operationIndex
     ) {
         return new LiftPatchException(
             new LiftPatchError(code, message, position, operationIndex));

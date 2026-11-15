@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 
 /**
  * One element of the assignment list of a {@code set} or an {@code update}
@@ -13,9 +13,9 @@ import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
  *
  * @param property the property written
  * @param value    the value assigned
- * @param position where the assignment was written
+ * @param range    where the assignment was written
  */
-public record Assignment(PropertyRef property, Value value, SourcePosition position) {
+public record Assignment(PropertyRef property, Value value, SourceRange range) {
 
     /**
      * An assignment at an unknown position.
@@ -25,7 +25,7 @@ public record Assignment(PropertyRef property, Value value, SourcePosition posit
      * @return the assignment
      */
     public static Assignment of(PropertyRef property, Value value) {
-        return new Assignment(property, value, SourcePosition.UNKNOWN);
+        return new Assignment(property, value, SourceRange.UNKNOWN);
     }
 
     @Override

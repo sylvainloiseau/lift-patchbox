@@ -12,14 +12,14 @@ import java.util.Objects;
  *
  * @param code           the normative error code
  * @param message        a human-readable explanation; never compared by conformance tests
- * @param position       where in the script the error was raised
+ * @param range          where in the script the error was raised
  * @param operationIndex the 1-based operation index (section 12.4.1), or 0 for a
  *                       script-level error such as a pragma error
  */
 public record LiftPatchError(
     ErrorCode code,
     String message,
-    SourcePosition position,
+    SourceRange range,
     int operationIndex
 ) {
 
@@ -28,14 +28,14 @@ public record LiftPatchError(
      *
      * @param code           the normative error code, never {@code null}
      * @param message        a human-readable explanation, never {@code null}
-     * @param position       where in the script the error was raised; {@link SourcePosition#UNKNOWN} if nowhere
+     * @param range          where in the script the error was raised; {@link SourceRange#UNKNOWN} if nowhere
      * @param operationIndex the 1-based operation index, or 0
-     * @throws NullPointerException if {@code code}, {@code message} or {@code position} is {@code null}
+     * @throws NullPointerException if {@code code}, {@code message} or {@code range} is {@code null}
      */
     public LiftPatchError {
         Objects.requireNonNull(code, "code");
         Objects.requireNonNull(message, "message");
-        Objects.requireNonNull(position, "position");
+        Objects.requireNonNull(range, "range");
     }
 
     /**
@@ -46,7 +46,7 @@ public record LiftPatchError(
      * @param position where in the script the error was raised
      * @return the error
      */
-    public static LiftPatchError of(ErrorCode code, String message, SourcePosition position) {
+    public static LiftPatchError of(ErrorCode code, String message, SourceRange position) {
         return new LiftPatchError(code, message, position, 0);
     }
 
@@ -68,8 +68,8 @@ public record LiftPatchError(
         StringBuilder sb = new StringBuilder();
         sb.append(code.kind() == ErrorKind.STATIC ? "static error " : "error ");
         sb.append('[').append(code.id()).append(']');
-        if (position.isKnown()) {
-            sb.append(" at ").append(position);
+        if (range.isKnown()) {
+            sb.append(" at ").append(range);
         }
         if (operationIndex > 0) {
             sb.append(" (operation ").append(operationIndex).append(')');

@@ -55,7 +55,16 @@ for (LiftPatchError error : check.errors()) {   // syntax and static, sorted by 
 Static validation then runs on the commands that parsed. When some did not, an
 `UNKNOWN_LABEL` is not reported for a label the script binds somewhere, and the
 operation index of the static errors is `0`, since the commands left out shift
-the numbering; their source position is exact.
+the numbering; their source range is exact.
+
+Every construct of the command model, every error and warning, and every plan
+operation has a `range()` (`SourceRange`): where it starts and ends in the text,
+as lines and columns (1-based) and offsets (0-based), both counted in UTF-16
+code units — a Java `String` index — with an exclusive end. A command's range
+covers what was written, without indentation, trailing comment or line break; a
+block covers its header to its end. An editor can highlight a command or
+underline an error with `text.substring(range.startOffset(), range.endOffset())`.
+The plan document keeps reporting the start line and column.
 
 The command-line tool is described in the [repository README](../README.md).
 

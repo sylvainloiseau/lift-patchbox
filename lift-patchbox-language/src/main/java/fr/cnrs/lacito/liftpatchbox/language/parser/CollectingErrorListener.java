@@ -2,17 +2,19 @@ package fr.cnrs.lacito.liftpatchbox.language.parser;
 
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.List;
 import org.antlr.v4.runtime.BaseErrorListener;
+import org.antlr.v4.runtime.Lexer;
+import org.antlr.v4.runtime.Token;
 import org.antlr.v4.runtime.RecognitionException;
 import org.antlr.v4.runtime.Recognizer;
 
 /**
  * An ANTLR error listener that turns every lexer and parser diagnostic into a
- * {@link ModelErrorCode#SYNTAX_ERROR}, with its position.
+ * {@link ModelErrorCode#SYNTAX_ERROR}, with its range.
  *
  * <p>The listener replaces ANTLR's default console listener, which writes to
  * {@code System.err} and is invisible to the caller. A line that matches the
@@ -20,34 +22,49 @@ import org.antlr.v4.runtime.Recognizer;
  * and never prose, which is why the concise parser installs this listener
  * too.</p>
  *
- * <p>An offset can be applied to every position, so that a fragment parsed out
- * of a larger document — a single concise command line, or the target step of
- * one — reports positions in the coordinates of that document rather than of the
- * fragment.</p>
+ * <p>The range of an error is the offending token, or, for a lexer error, the
+ * characters the lexer was reading; a {@link Locator} turns the indexes of the stream
+ * the recognizer reads into the ranges of the document, so that a fragment parsed out
+ * of a larger document — a concise command line — reports ranges of that document.</p>
  */
 public final class CollectingErrorListener extends BaseErrorListener {
 
-    private final List<LiftPatchError> errors = new ArrayList<>();
-    private final int lineOffset;
-    private final int columnOffset;
+    /** Where characters of the stream a recognizer reads are in the document. */
+    @FunctionalInterface
+    public interface Locator {
 
-    /**
-     * A listener reporting positions as the recognizer sees them.
-     */
-    public CollectingErrorListener() {
-        this(0, 0);
+        /**
+         * The range of characters of the stream.
+         *
+         * @param start the index of the first character, in code points of the stream
+         * @param end   the index after the last character, at least {@code start}
+         * @return their range in the document
+         */
+        SourceRange chars(int start, int end);
+
+        /**
+         * The range of a token of the stream.
+         *
+         * @param token a token
+         * @return its range, empty for a token of no character (end of file)
+         */
+        default SourceRange token(Token token) {
+            int start = token.getStartIndex();
+            int stop = token.getStopIndex();
+            return chars(start, stop < start ? start : stop + 1);
+        }
     }
 
+    private final List<LiftPatchError> errors = new ArrayList<>();
+    private final Locator locator;
+
     /**
-     * A listener shifting every reported position.
+     * A listener locating its errors with a locator.
      *
-     * @param lineOffset   added to the reported line minus one, so that a fragment
-     *                     starting on line {@code n} reports line {@code n}
-     * @param columnOffset added to the reported column
+     * @param locator the ranges of the stream's characters in the document
      */
-    public CollectingErrorListener(int lineOffset, int columnOffset) {
-        this.lineOffset = lineOffset;
-        this.columnOffset = columnOffset;
+    public CollectingErrorListener(Locator locator) {
+        this.locator = locator;
     }
 
     @Override
@@ -59,9 +76,17 @@ public final class CollectingErrorListener extends BaseErrorListener {
         String msg,
         RecognitionException e
     ) {
-        SourcePosition position =
-            new SourcePosition(line + lineOffset, charPositionInLine + 1 + columnOffset);
-        errors.add(LiftPatchError.of(ModelErrorCode.SYNTAX_ERROR, msg, position));
+        SourceRange range;
+        if (offendingSymbol instanceof Token t && t.getStartIndex() >= 0) {
+            range = locator.token(t);
+        } else if (recognizer instanceof Lexer lexer) {
+            int start = lexer._tokenStartCharIndex;
+            int end = Math.max(start, lexer.getInputStream().index());
+            range = locator.chars(start, end);
+        } else {
+            range = SourceRange.UNKNOWN;
+        }
+        errors.add(LiftPatchError.of(ModelErrorCode.SYNTAX_ERROR, msg, range));
     }
 
     /**

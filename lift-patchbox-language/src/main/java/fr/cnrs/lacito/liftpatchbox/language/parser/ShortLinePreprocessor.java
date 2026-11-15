@@ -4,7 +4,7 @@ import fr.cnrs.lacito.liftpatchbox.ast.Verb;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -94,6 +94,10 @@ public final class ShortLinePreprocessor {
      * @param bodyColumn the 1-based column the body starts at
      * @param groupId    the index of the command group this line belongs to
      * @param rawText    the whole line, comment stripped, for plan mode
+     * @param lineStart  the offset of the line's first character in the document
+     * @param range      the command, directive or pragma: from its first character (after
+     *                   the sigil and the indentation) to the end of the line, without the
+     *                   trailing comment and whitespace
      */
     public record Recognized(
         Kind kind,
@@ -104,7 +108,9 @@ public final class ShortLinePreprocessor {
         int lineNumber,
         int bodyColumn,
         int groupId,
-        String rawText
+        String rawText,
+        int lineStart,
+        SourceRange range
     ) {
 
         /** What a recognized line carries. */
@@ -118,12 +124,14 @@ public final class ShortLinePreprocessor {
         }
 
         /**
-         * The position of the start of the command body.
+         * The same line in another command group.
          *
-         * @return the source position
+         * @param group the index of the group
+         * @return the line
          */
-        public SourcePosition position() {
-            return new SourcePosition(lineNumber, bodyColumn);
+        Recognized inGroup(int group) {
+            return new Recognized(kind, verb, star, body, indent, lineNumber, bodyColumn, group, rawText,
+                lineStart, range);
         }
     }
 
@@ -136,10 +144,11 @@ public final class ShortLinePreprocessor {
      * @param totalLines     how many physical lines the document has
      * @param failedLines    the numbers of the recognized lines on which the scan
      *                       recorded an error, and that cannot be built
+     * @param index          the lines and offsets of the document
      */
     public record Scan(
         List<Recognized> lines, String sigil, Recognized pragmaLine, int totalLines,
-        Set<Integer> failedLines
+        Set<Integer> failedLines, TextIndex index
     ) {
 
         /**
@@ -150,6 +159,7 @@ public final class ShortLinePreprocessor {
          * @param pragmaLine  the recognized pragma line, or {@code null}
          * @param totalLines  how many physical lines the document has
          * @param failedLines the numbers of the lines that cannot be built
+         * @param index       the lines and offsets of the document
          */
         public Scan {
             lines = List.copyOf(lines);
@@ -178,7 +188,8 @@ public final class ShortLinePreprocessor {
      */
     public Scan scan(String document) {
         String[] physical = document.split("\\R", -1);
-        String sigil = findSigil(physical);
+        TextIndex index = new TextIndex(document);
+        String sigil = findSigil(physical, index);
         List<Recognized> out = new ArrayList<>();
         Recognized pragmaLine = null;
         int group = 0;
@@ -200,7 +211,8 @@ public final class ShortLinePreprocessor {
                 continue;
             }
 
-            Recognized recognized = recognize(line, lineNumber, sigil, group, sawCommand);
+            Recognized recognized = recognize(line, lineNumber, index.lineStart(lineNumber), index, sigil,
+                group, sawCommand);
             if (recognized == null) {
                 // Prose ends the current group (Part 3, section 3.3, rule 1).
                 inGroup = false;
@@ -215,15 +227,12 @@ public final class ShortLinePreprocessor {
             if (!inGroup) {
                 group++;
                 inGroup = true;
-                recognized = new Recognized(
-                    recognized.kind(), recognized.verb(), recognized.star(), recognized.body(),
-                    recognized.indent(), recognized.lineNumber(), recognized.bodyColumn(),
-                    group, recognized.rawText());
+                recognized = recognized.inGroup(group);
             }
             sawCommand = true;
             out.add(recognized);
         }
-        return new Scan(out, sigil, pragmaLine, physical.length, failedLines);
+        return new Scan(out, sigil, pragmaLine, physical.length, failedLines, index);
     }
 
     /**
@@ -232,8 +241,9 @@ public final class ShortLinePreprocessor {
      * all, and that decision cannot depend on a pragma only a command-aware scan
      * would find.
      */
-    private String findSigil(String[] physical) {
-        for (String raw : physical) {
+    private String findSigil(String[] physical, TextIndex index) {
+        for (int n = 0; n < physical.length; n++) {
+            String raw = physical[n];
             String line = raw.strip();
             if (line.isEmpty()) {
                 continue;
@@ -256,7 +266,7 @@ public final class ShortLinePreprocessor {
             int close = line.indexOf(quote, q + 1);
             if (close < 0 || close == q + 1) {
                 throw syntaxError("the sigil pragma attribute must declare one character",
-                    SourcePosition.ofLine(1));
+                    index.lineRange(n + 1));
             }
             return line.substring(q + 1, close);
         }
@@ -269,7 +279,8 @@ public final class ShortLinePreprocessor {
      * @return the recognized line, or {@code null} when the line is prose
      */
     private Recognized recognize(
-        String line, int lineNumber, String sigil, int group, boolean sawCommand
+        String line, int lineNumber, int lineStart, TextIndex index, String sigil, int group,
+        boolean sawCommand
     ) {
         int i = 0;
         while (i < line.length() && (line.charAt(i) == ' ' || line.charAt(i) == '\t')) {
@@ -308,7 +319,7 @@ public final class ShortLinePreprocessor {
                     "a tab may not be used to indent a command line: the width of a tab is a "
                         + "property of the reader's editor, and the parent of an edit may not "
                         + "depend on it",
-                    new SourcePosition(lineNumber, j + 1)));
+                    index.range(lineStart + j, lineStart + j + 1)));
             }
             indent++;
             j++;
@@ -317,19 +328,19 @@ public final class ShortLinePreprocessor {
             return null;
         }
         String rest = line.substring(j);
+        SourceRange range = index.range(lineStart + j, lineStart + line.stripTrailing().length());
 
         if (rest.startsWith("%liftpatch")) {
             if (sawCommand) {
-                report(syntaxError("the version pragma must precede the first command line",
-                    new SourcePosition(lineNumber, j + 1)));
+                report(syntaxError("the version pragma must precede the first command line", range));
                 return null;
             }
             return new Recognized(Recognized.Kind.PRAGMA, null, false, rest,
-                indent, lineNumber, j + 1, group, line.strip());
+                indent, lineNumber, j + 1, group, line.strip(), lineStart, range);
         }
         if (isDirective(rest)) {
             return new Recognized(Recognized.Kind.DIRECTIVE, null, false, rest,
-                indent, lineNumber, j + 1, group, line.strip());
+                indent, lineNumber, j + 1, group, line.strip(), lineStart, range);
         }
 
         char letter = rest.charAt(0);
@@ -357,7 +368,7 @@ public final class ShortLinePreprocessor {
         }
         Verb verb = Verb.fromCode(String.valueOf(letter));
         return new Recognized(Recognized.Kind.COMMAND, verb, star, body,
-            indent, lineNumber, j + k + 1, group, line.strip());
+            indent, lineNumber, j + k + 1, group, line.strip(), lineStart, range);
     }
 
     /** The language directives, followed by {@code object} or {@code meta}. */
@@ -436,7 +447,7 @@ public final class ShortLinePreprocessor {
             || c == '_' || c == '-' || c == '.';
     }
 
-    private LiftPatchException syntaxError(String message, SourcePosition position) {
+    private LiftPatchException syntaxError(String message, SourceRange position) {
         return new LiftPatchException(
             LiftPatchError.of(ModelErrorCode.SYNTAX_ERROR, message + " (in " + source + ")", position));
     }

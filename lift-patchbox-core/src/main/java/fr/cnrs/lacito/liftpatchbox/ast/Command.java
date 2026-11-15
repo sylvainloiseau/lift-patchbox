@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import java.util.List;
 
 /**
@@ -50,7 +50,7 @@ public sealed interface Command extends Item
      * @param at          the position clause, or {@code null} for the default {@code at end}
      * @param label       the label bound to the created component, or {@code null}
      * @param sourceText  the source text
-     * @param position    where the command begins
+     * @param range       where the command begins
      */
     record Create(
         Constructor constructor,
@@ -58,7 +58,7 @@ public sealed interface Command extends Item
         AtClause at,
         String label,
         String sourceText,
-        SourcePosition position
+        SourceRange range
     ) implements Command {
 
         @Override
@@ -68,7 +68,7 @@ public sealed interface Command extends Item
 
         @Override
         public Create withSourceText(String text) {
-            return new Create(constructor, parent, at, label, text, position);
+            return new Create(constructor, parent, at, label, text, range);
         }
 
         @Override
@@ -85,7 +85,7 @@ public sealed interface Command extends Item
      * @param at          the position clause, which applies only if the create branch runs
      * @param label       the label bound to the created or resolved component, or {@code null}
      * @param sourceText  the source text
-     * @param position    where the command begins
+     * @param range       where the command begins
      */
     record Upsert(
         Constructor constructor,
@@ -93,7 +93,7 @@ public sealed interface Command extends Item
         AtClause at,
         String label,
         String sourceText,
-        SourcePosition position
+        SourceRange range
     ) implements Command {
 
         @Override
@@ -103,7 +103,7 @@ public sealed interface Command extends Item
 
         @Override
         public Upsert withSourceText(String text) {
-            return new Upsert(constructor, parent, at, label, text, position);
+            return new Upsert(constructor, parent, at, label, text, range);
         }
 
         @Override
@@ -119,14 +119,14 @@ public sealed interface Command extends Item
      * @param parent     the parent chain, or {@code null} for an entry or inside a block
      * @param label      the label bound to the asserted component, or {@code null}
      * @param sourceText the source text
-     * @param position   where the command begins
+     * @param range      where the command begins
      */
     record Ensure(
         Step target,
         Chain parent,
         String label,
         String sourceText,
-        SourcePosition position
+        SourceRange range
     ) implements Command {
 
         @Override
@@ -136,7 +136,7 @@ public sealed interface Command extends Item
 
         @Override
         public Ensure withSourceText(String text) {
-            return new Ensure(target, parent, label, text, position);
+            return new Ensure(target, parent, label, text, range);
         }
 
         @Override
@@ -151,13 +151,13 @@ public sealed interface Command extends Item
      * @param target     the step naming the component or components to delete
      * @param parent     the parent chain, or {@code null} for an entry or inside a block
      * @param sourceText the source text
-     * @param position   where the command begins
+     * @param range      where the command begins
      */
     record Delete(
         Step target,
         Chain parent,
         String sourceText,
-        SourcePosition position
+        SourceRange range
     ) implements Command {
 
         @Override
@@ -167,7 +167,7 @@ public sealed interface Command extends Item
 
         @Override
         public Delete withSourceText(String text) {
-            return new Delete(target, parent, text, position);
+            return new Delete(target, parent, text, range);
         }
 
         @Override
@@ -184,7 +184,7 @@ public sealed interface Command extends Item
      * @param destinationParent the chain of the new parent, or {@code null} for a same-parent move
      * @param at                the mandatory position clause
      * @param sourceText        the source text
-     * @param position          where the command begins
+     * @param range             where the command begins
      */
     record Move(
         Step target,
@@ -192,7 +192,7 @@ public sealed interface Command extends Item
         Chain destinationParent,
         AtClause at,
         String sourceText,
-        SourcePosition position
+        SourceRange range
     ) implements Command {
 
         @Override
@@ -202,7 +202,7 @@ public sealed interface Command extends Item
 
         @Override
         public Move withSourceText(String text) {
-            return new Move(target, sourceParent, destinationParent, at, text, position);
+            return new Move(target, sourceParent, destinationParent, at, text, range);
         }
 
         @Override
@@ -227,13 +227,13 @@ public sealed interface Command extends Item
      * @param assignments the assignment list, in the order written
      * @param target      the chain naming the component written on, or {@code null} inside a block
      * @param sourceText  the source text
-     * @param position    where the command begins
+     * @param range       where the command begins
      */
     record Set(
         List<Assignment> assignments,
         Chain target,
         String sourceText,
-        SourcePosition position
+        SourceRange range
     ) implements Command {
 
         /**
@@ -242,7 +242,7 @@ public sealed interface Command extends Item
          * @param assignments the assignment list
          * @param target      the chain naming the component written on
          * @param sourceText  the source text
-         * @param position    where the command begins
+         * @param range       where the command begins
          */
         public Set {
             assignments = List.copyOf(assignments);
@@ -255,7 +255,7 @@ public sealed interface Command extends Item
 
         @Override
         public Set withSourceText(String text) {
-            return new Set(assignments, target, text, position);
+            return new Set(assignments, target, text, range);
         }
 
         @Override
@@ -270,13 +270,13 @@ public sealed interface Command extends Item
      * @param assignments the assignment list, in the order written
      * @param target      the chain naming the component written on, or {@code null} inside a block
      * @param sourceText  the source text
-     * @param position    where the command begins
+     * @param range       where the command begins
      */
     record Update(
         List<Assignment> assignments,
         Chain target,
         String sourceText,
-        SourcePosition position
+        SourceRange range
     ) implements Command {
 
         /**
@@ -285,7 +285,7 @@ public sealed interface Command extends Item
          * @param assignments the assignment list
          * @param target      the chain naming the component written on
          * @param sourceText  the source text
-         * @param position    where the command begins
+         * @param range       where the command begins
          */
         public Update {
             assignments = List.copyOf(assignments);
@@ -298,7 +298,7 @@ public sealed interface Command extends Item
 
         @Override
         public Update withSourceText(String text) {
-            return new Update(assignments, target, text, position);
+            return new Update(assignments, target, text, range);
         }
 
         @Override
@@ -313,13 +313,13 @@ public sealed interface Command extends Item
      * @param properties the property list, in the order written
      * @param target     the chain naming the component cleared, or {@code null} inside a block
      * @param sourceText the source text
-     * @param position   where the command begins
+     * @param range      where the command begins
      */
     record Clear(
         List<PropertyRef> properties,
         Chain target,
         String sourceText,
-        SourcePosition position
+        SourceRange range
     ) implements Command {
 
         /**
@@ -328,7 +328,7 @@ public sealed interface Command extends Item
          * @param properties the property list
          * @param target     the chain naming the component cleared
          * @param sourceText the source text
-         * @param position   where the command begins
+         * @param range      where the command begins
          */
         public Clear {
             properties = List.copyOf(properties);
@@ -341,7 +341,7 @@ public sealed interface Command extends Item
 
         @Override
         public Clear withSourceText(String text) {
-            return new Clear(properties, target, text, position);
+            return new Clear(properties, target, text, range);
         }
 
         @Override

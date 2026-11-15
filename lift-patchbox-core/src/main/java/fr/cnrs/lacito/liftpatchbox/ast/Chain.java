@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import java.util.ArrayList;
 import java.util.List;
 
@@ -119,12 +119,16 @@ public record Chain(List<Step> steps, List<Axis> axes) {
     }
 
     /**
-     * Where the chain begins, taken from its head step.
+     * The text of the chain: the range covering all its steps.
      *
-     * @return the source position of the head
+     * @return the range, {@link SourceRange#UNKNOWN} when no step has one
      */
-    public SourcePosition position() {
-        return head().position();
+    public SourceRange range() {
+        SourceRange range = SourceRange.UNKNOWN;
+        for (Step step : steps) {
+            range = range.cover(step.range());
+        }
+        return range;
     }
 
     @Override

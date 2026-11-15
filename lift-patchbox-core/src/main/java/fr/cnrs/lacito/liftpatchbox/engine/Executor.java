@@ -21,7 +21,7 @@ import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchWarning;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.error.ModelWarningCode;
 import fr.cnrs.lacito.liftapi.model.DuplicateTypeException;
 import fr.cnrs.lacito.liftpatchbox.metamodel.ComponentTypeDef;
@@ -168,7 +168,7 @@ public final class Executor {
         } catch (LiftPatchException e) {
             failure = e.firstError();
             operations.add(new Operation(
-                failure.operationIndex(), failure.position(), null, null, null,
+                failure.operationIndex(), failure.range(), null, null, null,
                 null, null, List.of(), null, failure));
             // The failing state: every change made before the failure, those of a
             // block already undone included, which the journal still holds.
@@ -230,7 +230,7 @@ public final class Executor {
             ComponentRef component = switch (block.header()) {
                 case BlockHeader.With with -> {
                     for (Map.Entry<LanguageKind, String> e : with.bindings().entrySet()) {
-                        resolver.requireLanguage(e.getKey(), e.getValue(), with.position());
+                        resolver.requireLanguage(e.getKey(), e.getValue(), with.range());
                         languages.bind(e.getKey(), e.getValue());
                     }
                     yield blockComponent;
@@ -243,7 +243,7 @@ public final class Executor {
                     if (selector.label() != null) {
                         resolver.bindLabel(selector.label(), resolved);
                     }
-                    addOperation(new Operation(index, selector.position(),
+                    addOperation(new Operation(index, selector.range(),
                         renderer.render(selector.chain()), "select", null,
                         targetInfo(resolved, selector.label()),
                         targetInfo(model.parentOf(resolved), null),
@@ -268,7 +268,7 @@ public final class Executor {
 
     private void executeDirective(Directive directive) {
         if (directive instanceof Directive.LanguageDefault d) {
-            resolver.requireLanguage(d.kind(), d.language(), d.position());
+            resolver.requireLanguage(d.kind(), d.language(), d.range());
             languages.bind(d.kind(), d.language());
             return;
         }
@@ -288,7 +288,7 @@ public final class Executor {
             case Directive.DefinitionDelete d -> definitionDelete(d);
         };
         summary.count(effect);
-        addOperation(new Operation(index, directive.position(), renderer.render(directive),
+        addOperation(new Operation(index, directive.range(), renderer.render(directive),
             directive.keyword(), null, null, null, List.of(effect), null, null));
     }
 
@@ -299,7 +299,7 @@ public final class Executor {
             throw resolver.error(ModelErrorCode.LANGUAGE_ALREADY_EXISTS,
                 "the dictionary already has the " + d.kind().jsonName() + " language `"
                     + d.language() + "`",
-                d.position());
+                d.range());
         }
         model.createLanguage(d.kind(), d.language());
         languages.bind(d.kind(), d.language());
@@ -311,24 +311,24 @@ public final class Executor {
         if (!model.hasLanguage(d.kind(), d.language())) {
             throw resolver.error(d.kind().noSuchLanguageError(),
                 "the dictionary has no " + kind + " language `" + d.language() + "`",
-                d.position());
+                d.range());
         }
         if (model.languageCount(d.kind()) == 1) {
             throw resolver.error(ModelErrorCode.CANNOT_DELETE_LAST_LANGUAGE,
                 "`" + d.language() + "` is the only " + kind + " language of the dictionary, "
                     + "whose list of " + kind + " languages cannot be empty",
-                d.position());
+                d.range());
         }
         if (model.languageInUse(d.kind(), d.language())) {
             throw resolver.error(ModelErrorCode.LANGUAGE_IN_USE,
                 "texts of the dictionary are written in the " + kind + " language `"
                     + d.language() + "`",
-                d.position());
+                d.range());
         }
         if (languages.isBound(d.kind(), d.language())) {
             throw resolver.error(ModelErrorCode.LANGUAGE_IN_USE,
                 "`" + d.language() + "` is the default " + kind + " language bound in scope",
-                d.position());
+                d.range());
         }
         model.deleteLanguage(d.kind(), d.language());
         return Effect.languageDeleted(kind, d.language());
@@ -338,15 +338,15 @@ public final class Executor {
 
     private Effect featureSetCreate(Directive.FeatureSetCreate d) {
         if (model.hasFeatureSet(d.name())) {
-            throw alreadyDeclared("feature set", d.name(), d.position());
+            throw alreadyDeclared("feature set", d.name(), d.range());
         }
         model.createFeatureSet(d.name());
         return Effect.declarationCreated("feature-set", d.name(), null);
     }
 
     private Effect featureSetDelete(Directive.FeatureSetDelete d) {
-        requireFeatureSet(d.name(), d.position());
-        requireNotBuiltIn(d.name(), "deleted", d.position());
+        requireFeatureSet(d.name(), d.range());
+        requireNotBuiltIn(d.name(), "deleted", d.range());
         try {
             model.deleteFeatureSet(d.name());
         } catch (IllegalStateException e) {
@@ -355,18 +355,18 @@ public final class Executor {
             // question only the model answers (Part 1, section 2.1.4).
             throw resolver.error(ModelErrorCode.DECLARATION_IN_USE,
                 "the feature set `" + d.name() + "` is in use: " + e.getMessage(),
-                d.position());
+                d.range());
         }
         return Effect.declarationDeleted("feature-set", d.name(), null);
     }
 
     private Effect featureSetRename(Directive.FeatureSetRename d) {
-        requireFeatureSet(d.name(), d.position());
-        requireNotBuiltIn(d.name(), "renamed", d.position());
+        requireFeatureSet(d.name(), d.range());
+        requireNotBuiltIn(d.name(), "renamed", d.range());
         if (model.hasFeatureSet(d.newName())) {
-            throw alreadyDeclared("feature set", d.newName(), d.position());
+            throw alreadyDeclared("feature set", d.newName(), d.range());
         }
-        requireNotExternal(d.name(), d.position());
+        requireNotExternal(d.name(), d.range());
         model.renameFeatureSet(d.name(), d.newName());
         return Effect.declarationRenamed("feature-set", d.name(), null, d.newName());
     }
@@ -374,35 +374,35 @@ public final class Executor {
     // ------------------------------------------------------------ features
 
     private Effect featureCreate(Directive.FeatureCreate d) {
-        requireFeatureSet(d.featureSet(), d.position());
+        requireFeatureSet(d.featureSet(), d.range());
         // A value the dictionary uses but its range does not declare is declared here,
         // as a command naming it would (Part 1, section 2.1.4).
         if (model.hasDeclaredFeature(d.featureSet(), d.name())) {
-            throw alreadyDeclared("feature", d.name() + "` in `" + d.featureSet(), d.position());
+            throw alreadyDeclared("feature", d.name() + "` in `" + d.featureSet(), d.range());
         }
-        requireNotExternal(d.featureSet(), d.position());
+        requireNotExternal(d.featureSet(), d.range());
         model.createFeature(d.featureSet(), d.name());
         return Effect.declarationCreated("feature", d.name(), d.featureSet());
     }
 
     private Effect featureDelete(Directive.FeatureDelete d) {
-        requireFeature(d.featureSet(), d.name(), d.position());
-        requireNotExternal(d.featureSet(), d.position());
+        requireFeature(d.featureSet(), d.name(), d.range());
+        requireNotExternal(d.featureSet(), d.range());
         if (model.featureInUse(d.featureSet(), d.name())) {
             throw resolver.error(ModelErrorCode.DECLARATION_IN_USE,
                 "the feature `" + d.name() + "` of `" + d.featureSet() + "` is in use",
-                d.position());
+                d.range());
         }
         model.deleteFeature(d.featureSet(), d.name());
         return Effect.declarationDeleted("feature", d.name(), d.featureSet());
     }
 
     private Effect featureRename(Directive.FeatureRename d) {
-        requireFeature(d.featureSet(), d.name(), d.position());
+        requireFeature(d.featureSet(), d.name(), d.range());
         if (model.hasFeature(d.featureSet(), d.newName())) {
-            throw alreadyDeclared("feature", d.newName() + "` in `" + d.featureSet(), d.position());
+            throw alreadyDeclared("feature", d.newName() + "` in `" + d.featureSet(), d.range());
         }
-        requireNotExternal(d.featureSet(), d.position());
+        requireNotExternal(d.featureSet(), d.range());
         model.renameFeature(d.featureSet(), d.name(), d.newName());
         return Effect.declarationRenamed("feature", d.name(), d.featureSet(), d.newName());
     }
@@ -412,13 +412,13 @@ public final class Executor {
     private Effect definitionCreate(Directive.DefinitionCreate d) {
         boolean field = d.kind() == Directive.DefinitionKind.FIELD;
         if (model.hasDefinition(d.name())) {
-            throw alreadyDeclared("field or trait definition", d.name(), d.position());
+            throw alreadyDeclared("field or trait definition", d.name(), d.range());
         }
-        if (d.range() != null) {
-            requireFeatureSet(d.range(), d.position());
+        if (d.optionRange() != null) {
+            requireFeatureSet(d.optionRange(), d.range());
         }
         String dataModel = d.model() != null ? d.model() : field ? "multitext" : "string";
-        model.createDefinition(field, d.name(), dataModel, d.range());
+        model.createDefinition(field, d.name(), dataModel, d.optionRange());
         return Effect.declarationCreated(d.kind().jsonName(), d.name(), null);
     }
 
@@ -427,13 +427,13 @@ public final class Executor {
         if (!model.hasDefinition(d.name()) || !model.definitionIsOfKind(d.name(), field)) {
             throw resolver.error(ModelErrorCode.NO_SUCH_DECLARATION,
                 "the dictionary declares no " + d.kind().jsonName() + " `" + d.name() + "`",
-                d.position());
+                d.range());
         }
         if (model.definitionInUse(d.name())) {
             throw resolver.error(ModelErrorCode.DECLARATION_IN_USE,
                 "the " + d.kind().jsonName() + " definition `" + d.name()
                     + "` is used by a " + d.kind().jsonName() + " of the dictionary",
-                d.position());
+                d.range());
         }
         model.deleteDefinition(d.name());
         return Effect.declarationDeleted(d.kind().jsonName(), d.name(), null);
@@ -441,14 +441,14 @@ public final class Executor {
 
     // ------------------------------------------------------------ shared checks
 
-    private void requireFeatureSet(String id, SourcePosition position) {
+    private void requireFeatureSet(String id, SourceRange position) {
         if (!model.hasFeatureSet(id)) {
             throw resolver.error(ModelErrorCode.NO_SUCH_DECLARATION,
                 "the dictionary declares no feature set `" + id + "`", position);
         }
     }
 
-    private void requireFeature(String featureSet, String id, SourcePosition position) {
+    private void requireFeature(String featureSet, String id, SourceRange position) {
         requireFeatureSet(featureSet, position);
         if (!model.hasFeature(featureSet, id)) {
             throw resolver.error(ModelErrorCode.NO_SUCH_DECLARATION,
@@ -456,7 +456,7 @@ public final class Executor {
         }
     }
 
-    private void requireNotBuiltIn(String id, String done, SourcePosition position) {
+    private void requireNotBuiltIn(String id, String done, SourceRange position) {
         if (model.isBuiltInFeatureSet(id)) {
             throw resolver.error(ModelErrorCode.DECLARATION_IS_BUILT_IN,
                 "`" + id + "` is a built-in feature set, which cannot be " + done,
@@ -464,7 +464,7 @@ public final class Executor {
         }
     }
 
-    private void requireNotExternal(String id, SourcePosition position) {
+    private void requireNotExternal(String id, SourceRange position) {
         if (model.isExternal(id)) {
             throw resolver.error(ModelErrorCode.DECLARATION_IS_EXTERNAL,
                 "the feature set `" + id + "` is defined in an external ranges file, which is "
@@ -473,7 +473,7 @@ public final class Executor {
         }
     }
 
-    private LiftPatchException alreadyDeclared(String what, String name, SourcePosition position) {
+    private LiftPatchException alreadyDeclared(String what, String name, SourceRange position) {
         return resolver.error(ModelErrorCode.DECLARATION_ALREADY_EXISTS,
             "the dictionary already declares the " + what + " `" + name + "`", position);
     }
@@ -514,7 +514,7 @@ public final class Executor {
             resolver.bindLabel(command.label(), created);
         }
         effects.forEach(summary::count);
-        addOperation(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.range(), text(command),
             "create", null, targetInfo(created, command.label()), targetInfo(parent, null),
             effects, null, null));
         return created;
@@ -538,8 +538,8 @@ public final class Executor {
         Integer position = creationPosition(at, parent, def);
         LiftModel.NewComponent spec = new LiftModel.NewComponent(type, scalars, multitexts);
         ComponentRef created = refusalAware(
-            () -> model.createChild(parent, spec, position), def, constructor.position());
-        checkUniquenessInvariant(parent, created, def, constructor.position());
+            () -> model.createChild(parent, spec, position), def, constructor.range());
+        checkUniquenessInvariant(parent, created, def, constructor.range());
 
         effects.add(Effect.created(type, model.positionOf(created).orElse(null)));
         effects.addAll(written);
@@ -567,16 +567,16 @@ public final class Executor {
                 resolver.error(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
                     "the metamodel defines no property `" + ref.name() + "` on a `"
                         + def.name() + "`",
-                    ref.position()));
+                    ref.range()));
             if (!property.datatype().isMultitext()) {
                 String value =
-                    resolver.scalarValueOf(assignment.value(), property, assignment.position());
+                    resolver.scalarValueOf(assignment.value(), property, assignment.range());
                 scalars.put(property.name(), value);
                 effects.add(Effect.written(property.name(), null, null, value));
                 continue;
             }
             for (Map.Entry<String, String> qualified
-                : qualifiedValues(ref, property, assignment.value(), assignment.position()).entrySet()) {
+                : qualifiedValues(ref, property, assignment.value(), assignment.range()).entrySet()) {
                 multitexts
                     .computeIfAbsent(property.name(), k -> new LinkedHashMap<>())
                     .put(qualified.getKey(), qualified.getValue());
@@ -592,12 +592,12 @@ public final class Executor {
      * sequence of the corresponding single-qualifier assignments.
      */
     private Map<String, String> qualifiedValues(
-        PropertyRef ref, PropertyDef property, Value value, SourcePosition position
+        PropertyRef ref, PropertyDef property, Value value, SourceRange position
     ) {
         Map<String, String> out = new LinkedHashMap<>();
         if (value instanceof Value.Multitext literal) {
             for (LangText entry : literal.entries()) {
-                resolver.requireLanguage(property.qualifier(), entry.language(), entry.position());
+                resolver.requireLanguage(property.qualifier(), entry.language(), entry.range());
                 out.put(entry.language(), entry.text());
             }
             return out;
@@ -628,7 +628,7 @@ public final class Executor {
         if (matches.size() > 1) {
             throw resolver.error(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 matches.size() + " components match the upsert, which must designate one",
-                constructor.position());
+                constructor.range());
         }
 
         List<Effect> effects = new ArrayList<>();
@@ -653,7 +653,7 @@ public final class Executor {
             resolver.bindLabel(command.label(), component);
         }
         effects.forEach(summary::count);
-        addOperation(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.range(), text(command),
             "upsert", null, targetInfo(component, command.label()), targetInfo(parent, null),
             effects, null, null));
         return component;
@@ -703,7 +703,7 @@ public final class Executor {
             }
             if (!property.datatype().isMultitext()) {
                 String expected = resolver.scalarValueOf(
-                    assignment.value(), property, assignment.position());
+                    assignment.value(), property, assignment.range());
                 if (!expected.equals(model.scalar(candidate, name).orElse(null))) {
                     return false;
                 }
@@ -714,7 +714,7 @@ public final class Executor {
             Map<String, String> wanted = new LinkedHashMap<>();
             for (Initializer.Assignment a : constructor.assignments()) {
                 if (a.property().name().equals(name)) {
-                    wanted.putAll(qualifiedValues(a.property(), property, a.value(), a.position()));
+                    wanted.putAll(qualifiedValues(a.property(), property, a.value(), a.range()));
                 }
             }
             boolean agrees = false;
@@ -754,7 +754,7 @@ public final class Executor {
         if (command.label() != null) {
             resolver.bindLabel(command.label(), component);
         }
-        addOperation(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.range(), text(command),
             "ensure", null, targetInfo(component, command.label()),
             targetInfo(model.parentOf(component), null), List.of(), null, null));
         return component;
@@ -769,7 +769,7 @@ public final class Executor {
         List<ComponentRef> targets =
             resolveTarget(command.target(), command.parent(), blockComponent, !marked);
         if (marked && targets.isEmpty()) {
-            warnCommandAppliesToNoComponent(command.position(), index);
+            warnCommandAppliesToNoComponent(command.range(), index);
         }
 
         // The positions reported are those of the original list, not of the list as
@@ -797,7 +797,7 @@ public final class Executor {
                 effects.add(effect);
             }
         }
-        addOperation(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.range(), text(command),
             "delete", marked ? command.target().multiplicity().spelling() : null,
             marked || targets.isEmpty() ? null : targetInfo(targets.get(0), null),
             null, marked ? null : effects, applications, null));
@@ -841,7 +841,7 @@ public final class Executor {
         if (found.size() > 1) {
             throw resolver.error(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 found.size() + " components match `" + command.target() + "`",
-                command.target().position());
+                command.target().range());
         }
         ComponentRef target = found.get(0);
         ComponentRef destination = command.destinationParent() == null
@@ -852,12 +852,12 @@ public final class Executor {
         if (!metamodel.isLegalParent(destination.componentType(), type)) {
             throw resolver.error(ModelErrorCode.ILLEGAL_PARENT,
                 "a `" + destination.componentType() + "` cannot hold a `" + type + "`",
-                command.position());
+                command.range());
         }
         if (isAncestorOrSelf(target, destination)) {
             throw resolver.error(ModelErrorCode.SELF_ANCESTOR,
                 "a component cannot be moved under itself or under one of its own descendants",
-                command.position());
+                command.range());
         }
 
         boolean sameParent = destination.equals(sourceParent);
@@ -868,17 +868,17 @@ public final class Executor {
 
         if (sameParent && to == from) {
             throw resolver.error(ModelErrorCode.MOVING_TO_CURRENT_POSITION,
-                "the component already occupies position " + from, command.at().position());
+                "the component already occupies position " + from, command.at().range());
         }
 
         model.move(target, destination, to);
         checkUniquenessInvariant(destination, target,
-            metamodel.requireComponentType(type), command.position());
+            metamodel.requireComponentType(type), command.range());
 
         Effect effect = Effect.moved(type, from, model.positionOf(target).orElse(to),
             path(sourceParent), path(destination));
         summary.count(effect);
-        addOperation(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.range(), text(command),
             "move", null, targetInfo(target, null), targetInfo(destination, null),
             List.of(effect), null, null));
         return target;
@@ -914,7 +914,7 @@ public final class Executor {
             components = resolver.resolveChain(target, !marked, blockComponent, marked);
         }
         if (marked && components.isEmpty()) {
-            warnCommandAppliesToNoComponent(command.position(), index);
+            warnCommandAppliesToNoComponent(command.range(), index);
         }
 
         List<Effect> effects = new ArrayList<>();
@@ -930,7 +930,7 @@ public final class Executor {
             for (PropertyRef property : cleared) {
                 local.addAll(applyClear(component, def, property));
             }
-            checkUniquenessInvariant(model.parentOf(component), component, def, command.position());
+            checkUniquenessInvariant(model.parentOf(component), component, def, command.range());
             local.forEach(summary::count);
             if (marked) {
                 applications.add(new Operation.Application(targetInfo(component, null), local));
@@ -938,7 +938,7 @@ public final class Executor {
                 effects.addAll(local);
             }
         }
-        addOperation(new Operation(index, command.position(), text(command),
+        addOperation(new Operation(index, command.range(), text(command),
             verb.keyword(), marked ? target.head().multiplicity().spelling() : null,
             marked || components.isEmpty() ? null : targetInfo(components.get(0), null),
             null, marked ? null : effects, applications, null));
@@ -947,30 +947,30 @@ public final class Executor {
 
     private static Initializer.Assignment toInitializer(Assignment assignment) {
         return new Initializer.Assignment(
-            assignment.property(), assignment.value(), assignment.position());
+            assignment.property(), assignment.value(), assignment.range());
     }
 
     private List<Effect> applySet(
         ComponentRef component, ComponentTypeDef def, Initializer.Assignment assignment
     ) {
         PropertyRef ref = assignment.property();
-        PropertyDef property = requireProperty(def, ref, assignment.position());
+        PropertyDef property = requireProperty(def, ref, assignment.range());
         List<Effect> effects = new ArrayList<>();
         if (!property.datatype().isMultitext()) {
             String old = model.scalar(component, property.name()).orElse(null);
             String value = resolver.scalarValueOf(
-                assignment.value(), property, assignment.position());
+                assignment.value(), property, assignment.range());
             refusalAware(
                 () -> {
                     model.setScalar(component, property.name(), value);
                     return null;
                 },
-                def, assignment.position());
+                def, assignment.range());
             effects.add(Effect.written(property.name(), null, old, value));
             return effects;
         }
         for (Map.Entry<String, String> qualified
-            : qualifiedValues(ref, property, assignment.value(), assignment.position()).entrySet()) {
+            : qualifiedValues(ref, property, assignment.value(), assignment.range()).entrySet()) {
             String old = model.qualified(component, property.name(), qualified.getKey())
                 .orElse(null);
             model.setQualified(
@@ -988,24 +988,24 @@ public final class Executor {
         ComponentRef component, ComponentTypeDef def, Assignment assignment
     ) {
         PropertyRef ref = assignment.property();
-        PropertyDef property = requireProperty(def, ref, assignment.position());
+        PropertyDef property = requireProperty(def, ref, assignment.range());
         if (!property.datatype().isMultitext()) {
             if (model.scalar(component, property.name()).isEmpty()) {
                 throw resolver.error(ModelErrorCode.UNSET_PROPERTY,
                     "`update` replaces an existing value, and `" + property.qualifiedName()
                         + "` has none; `set` is the command to use",
-                    assignment.position());
+                    assignment.range());
             }
             return applySet(component, def, toInitializer(assignment));
         }
         for (String language
-            : qualifiedValues(ref, property, assignment.value(), assignment.position()).keySet()) {
+            : qualifiedValues(ref, property, assignment.value(), assignment.range()).keySet()) {
             if (model.qualified(component, property.name(), language).isEmpty()) {
                 throw resolver.error(ModelErrorCode.UNSET_QUALIFIED_PROPERTY,
                     "`update` tests the qualified value, not the property: `" + property.name()
                         + "@" + language + "` is not set, even if another language of `"
                         + property.name() + "` is",
-                    assignment.position());
+                    assignment.range());
             }
         }
         return applySet(component, def, toInitializer(assignment));
@@ -1018,14 +1018,14 @@ public final class Executor {
     private List<Effect> applyClear(
         ComponentRef component, ComponentTypeDef def, PropertyRef ref
     ) {
-        PropertyDef property = requireProperty(def, ref, ref.position());
+        PropertyDef property = requireProperty(def, ref, ref.range());
         List<Effect> effects = new ArrayList<>();
 
         if (!property.datatype().isMultitext()) {
             String old = model.scalar(component, property.name()).orElse(null);
             if (old == null) {
                 throw resolver.error(ModelErrorCode.UNSET_PROPERTY,
-                    "`" + property.qualifiedName() + "` has no value to remove", ref.position());
+                    "`" + property.qualifiedName() + "` has no value to remove", ref.range());
             }
             model.setScalar(component, property.name(), null);
             effects.add(Effect.removed(property.name(), null, old));
@@ -1040,11 +1040,11 @@ public final class Executor {
                 throw resolver.error(ModelErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
                     "`clear " + property.name() + "@*` would empty a required or identity "
                         + "multitext, and such a property may never become unset",
-                    ref.position());
+                    ref.range());
             }
             if (present.isEmpty()) {
                 throw resolver.error(ModelErrorCode.UNSET_PROPERTY,
-                    "`" + property.qualifiedName() + "` has no value to remove", ref.position());
+                    "`" + property.qualifiedName() + "` has no value to remove", ref.range());
             }
             for (String language : present) {
                 String old = model.qualified(component, property.name(), language).orElse(null);
@@ -1054,17 +1054,17 @@ public final class Executor {
             return effects;
         }
 
-        String language = resolver.languageOf(ref, property, ref.position());
+        String language = resolver.languageOf(ref, property, ref.range());
         if (!present.contains(language)) {
             throw resolver.error(ModelErrorCode.UNSET_QUALIFIED_PROPERTY,
-                "`" + property.name() + "@" + language + "` is not set", ref.position());
+                "`" + property.name() + "@" + language + "` is not set", ref.range());
         }
         if (protectedMultitext && present.size() == 1) {
             throw resolver.error(ModelErrorCode.CANNOT_CLEAR_REQUIRED_MULTITEXT,
                 "`" + property.qualifiedName() + "` is required and `" + language
                     + "` is its only value; `clear` is refused rather than allowed to produce a "
                     + "component that `create` would have rejected",
-                ref.position());
+                ref.range());
         }
         String old = model.qualified(component, property.name(), language).orElse(null);
         model.removeQualified(component, property.name(), language);
@@ -1076,7 +1076,7 @@ public final class Executor {
     }
 
     private PropertyDef requireProperty(
-        ComponentTypeDef def, PropertyRef ref, SourcePosition position
+        ComponentTypeDef def, PropertyRef ref, SourceRange position
     ) {
         return def.property(ref.name()).orElseThrow(() -> resolver.error(
             ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
@@ -1106,11 +1106,11 @@ public final class Executor {
         ComponentRef resolvedParent =
             resolveParent(parent, stepType(target), blockComponent);
         if (target instanceof Step.Label label) {
-            return List.of(resolver.label(label.name(), label.position()));
+            return List.of(resolver.label(label.name(), label.range()));
         }
         if (resolvedParent == null) {
             throw resolver.error(ModelErrorCode.MISSING_PARENT_CLAUSE,
-                "the command names no parent", target.position());
+                "the command names no parent", target.range());
         }
         List<ComponentRef> found = resolver.resolveStepUnder(resolvedParent, target);
         if (found.isEmpty() && unique) {
@@ -1118,7 +1118,7 @@ public final class Executor {
         }
         if (unique && found.size() > 1) {
             throw resolver.error(ModelErrorCode.AMBIGUOUS_REFERENCE,
-                found.size() + " components match `" + renderer.render(target) + "`", target.position());
+                found.size() + " components match `" + renderer.render(target) + "`", target.range());
         }
         return found;
     }
@@ -1139,11 +1139,11 @@ public final class Executor {
                 return resolver.error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
                     "the ordinal " + c.ordinal() + " is greater than the " + count
                         + " same-type sibling(s) under this parent",
-                    target.position());
+                    target.range());
             }
         }
         return resolver.error(ModelErrorCode.NOT_FOUND,
-            "no component matches `" + renderer.render(target) + "`", target.position());
+            "no component matches `" + renderer.render(target) + "`", target.range());
     }
 
     /**
@@ -1167,7 +1167,7 @@ public final class Executor {
                 int n = at.index();
                 if (n > count + 1) {
                     throw resolver.error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
-                        "the valid insertion range is 1.." + (count + 1), at.position());
+                        "the valid insertion range is 1.." + (count + 1), at.range());
                 }
                 yield n;
             }
@@ -1187,7 +1187,7 @@ public final class Executor {
                 int n = at.index();
                 if (n > upperBound) {
                     throw resolver.error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
-                        "the valid destination range is 1.." + upperBound, at.position());
+                        "the valid destination range is 1.." + upperBound, at.range());
                 }
                 yield n;
             }
@@ -1219,14 +1219,14 @@ public final class Executor {
         if (step instanceof Step.Component component) {
             Step.Component typed = component.componentType() == null
                 ? new Step.Component(type, component.predicates(), component.ordinal(),
-                    component.typeKey(), null, component.position())
+                    component.typeKey(), null, component.range())
                 : component;
             if (typed.ordinal() != null) {
                 if (typed.ordinal() > siblings.size()) {
                     throw resolver.error(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
                         "the ordinal " + typed.ordinal() + " is greater than the "
                             + siblings.size() + " same-type sibling(s)",
-                        at.position());
+                        at.range());
                 }
                 matches.add(siblings.get(typed.ordinal() - 1));
             } else {
@@ -1239,19 +1239,19 @@ public final class Executor {
         }
         if (matches.isEmpty()) {
             throw resolver.error(ModelErrorCode.NOT_FOUND,
-                "the `at` clause names no sibling of the component being placed", at.position());
+                "the `at` clause names no sibling of the component being placed", at.range());
         }
         if (matches.size() > 1) {
             throw resolver.error(ModelErrorCode.AMBIGUOUS_REFERENCE,
                 "the `at` clause names " + matches.size() + " siblings and must name one",
-                at.position());
+                at.range());
         }
         ComponentRef sibling = matches.get(0);
         if (moving != null && sibling.equals(moving)) {
             throw resolver.error(ModelErrorCode.MOVING_TO_CURRENT_POSITION,
                 "the `at` clause names the component being moved, which asks for the position it "
                     + "already occupies",
-                at.position());
+                at.range());
         }
         return siblings.indexOf(sibling);
     }
@@ -1276,7 +1276,7 @@ public final class Executor {
      * {@code DECLARATION_IS_EXTERNAL}.</p>
      */
     private <T> T refusalAware(
-        java.util.function.Supplier<T> mutation, ComponentTypeDef def, SourcePosition position
+        java.util.function.Supplier<T> mutation, ComponentTypeDef def, SourceRange position
     ) {
         try {
             return mutation.get();
@@ -1300,7 +1300,7 @@ public final class Executor {
      * exactly as if the check had run first.</p>
      */
     private void checkUniquenessInvariant(
-        ComponentRef parent, ComponentRef component, ComponentTypeDef def, SourcePosition position
+        ComponentRef parent, ComponentRef component, ComponentTypeDef def, SourceRange position
     ) {
         if (parent == null || def.hasEmptyIdentity()) {
             return;
@@ -1367,7 +1367,7 @@ public final class Executor {
     // Plan-document helpers
     // ===================================================================
 
-    private void warnCommandAppliesToNoComponent(SourcePosition position, int index) {
+    private void warnCommandAppliesToNoComponent(SourceRange position, int index) {
         warn(new LiftPatchWarning(ModelWarningCode.COMMAND_APPLIES_TO_NO_COMPONENT,
             "the marked target step matched no component; the command changes nothing, which is "
                 + "legal and worth saying out loud",

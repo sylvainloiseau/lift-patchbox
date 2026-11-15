@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 
 /**
  * The {@code at POSITION} clause of Part 1, section 6.2, which states where a
@@ -13,9 +13,9 @@ import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
  * @param kind     which of the five positions is written
  * @param index    the 1-based index of {@code at index n}, or {@code null}
  * @param step     the sibling step of {@code at before} / {@code at after}, or {@code null}
- * @param position where the clause was written
+ * @param range    where the clause was written
  */
-public record AtClause(Kind kind, Integer index, Step step, SourcePosition position) {
+public record AtClause(Kind kind, Integer index, Step step, SourceRange range) {
 
     /** The five positions the clause may name. */
     public enum Kind {
@@ -37,7 +37,7 @@ public record AtClause(Kind kind, Integer index, Step step, SourcePosition posit
      * @return the clause
      */
     public static AtClause beginning() {
-        return new AtClause(Kind.BEGINNING, null, null, SourcePosition.UNKNOWN);
+        return new AtClause(Kind.BEGINNING, null, null, SourceRange.UNKNOWN);
     }
 
     /**
@@ -46,7 +46,7 @@ public record AtClause(Kind kind, Integer index, Step step, SourcePosition posit
      * @return the clause
      */
     public static AtClause end() {
-        return new AtClause(Kind.END, null, null, SourcePosition.UNKNOWN);
+        return new AtClause(Kind.END, null, null, SourceRange.UNKNOWN);
     }
 
     /**
@@ -56,7 +56,7 @@ public record AtClause(Kind kind, Integer index, Step step, SourcePosition posit
      * @return the clause
      */
     public static AtClause index(int n) {
-        return new AtClause(Kind.INDEX, n, null, SourcePosition.UNKNOWN);
+        return new AtClause(Kind.INDEX, n, null, SourceRange.UNKNOWN);
     }
 
     /**
@@ -66,7 +66,7 @@ public record AtClause(Kind kind, Integer index, Step step, SourcePosition posit
      * @return the clause
      */
     public static AtClause before(Step sibling) {
-        return new AtClause(Kind.BEFORE, null, sibling, SourcePosition.UNKNOWN);
+        return new AtClause(Kind.BEFORE, null, sibling, SourceRange.UNKNOWN);
     }
 
     /**
@@ -76,7 +76,7 @@ public record AtClause(Kind kind, Integer index, Step step, SourcePosition posit
      * @return the clause
      */
     public static AtClause after(Step sibling) {
-        return new AtClause(Kind.AFTER, null, sibling, SourcePosition.UNKNOWN);
+        return new AtClause(Kind.AFTER, null, sibling, SourceRange.UNKNOWN);
     }
 
     @Override

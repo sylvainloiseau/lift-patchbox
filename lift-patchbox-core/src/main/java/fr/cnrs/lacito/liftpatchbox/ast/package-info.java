@@ -16,7 +16,7 @@
  * built command is checked by the same semantic validator, against the same
  * metamodel, and is rejected with the same codes as a parsed one.</p>
  *
- * <p>Every node carries a {@link fr.cnrs.lacito.liftpatchbox.error.SourcePosition},
+ * <p>Every node carries a {@link fr.cnrs.lacito.liftpatchbox.error.SourceRange},
  * filled in by the visitors from the ANTLR tokens, so that an error can be
  * reported against the line the user wrote.</p>
  */

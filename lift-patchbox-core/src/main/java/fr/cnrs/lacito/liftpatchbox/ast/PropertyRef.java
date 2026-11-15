@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 
 /**
  * A reference to a property, optionally carrying a language qualifier.
@@ -21,9 +21,9 @@ import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
  * @param name     the property name, spelled in full
  * @param language the language code, or {@code null} when none is written
  * @param wildcard whether the qualifier written is {@code @*}
- * @param position where the reference was written
+ * @param range    where the reference was written
  */
-public record PropertyRef(String name, String language, boolean wildcard, SourcePosition position) {
+public record PropertyRef(String name, String language, boolean wildcard, SourceRange range) {
 
     /**
      * A property reference with no qualifier.
@@ -32,7 +32,7 @@ public record PropertyRef(String name, String language, boolean wildcard, Source
      * @return the reference, at an unknown position
      */
     public static PropertyRef of(String name) {
-        return new PropertyRef(name, null, false, SourcePosition.UNKNOWN);
+        return new PropertyRef(name, null, false, SourceRange.UNKNOWN);
     }
 
     /**
@@ -43,7 +43,7 @@ public record PropertyRef(String name, String language, boolean wildcard, Source
      * @return the reference, at an unknown position
      */
     public static PropertyRef of(String name, String language) {
-        return new PropertyRef(name, language, false, SourcePosition.UNKNOWN);
+        return new PropertyRef(name, language, false, SourceRange.UNKNOWN);
     }
 
     /**
@@ -53,7 +53,7 @@ public record PropertyRef(String name, String language, boolean wildcard, Source
      * @return the reference, at an unknown position
      */
     public static PropertyRef wildcard(String name) {
-        return new PropertyRef(name, null, true, SourcePosition.UNKNOWN);
+        return new PropertyRef(name, null, true, SourceRange.UNKNOWN);
     }
 
     /**
@@ -71,7 +71,7 @@ public record PropertyRef(String name, String language, boolean wildcard, Source
      * @param p the new position
      * @return a copy carrying {@code p}
      */
-    public PropertyRef at(SourcePosition p) {
+    public PropertyRef at(SourceRange p) {
         return new PropertyRef(name, language, wildcard, p);
     }
 

@@ -2,7 +2,7 @@ package fr.cnrs.lacito.liftpatchbox.language.parser;
 
 import fr.cnrs.lacito.liftpatchbox.ast.Directive;
 import fr.cnrs.lacito.liftpatchbox.ast.Directive.DefinitionKind;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.metamodel.LanguageKind;
 import java.util.List;
 
@@ -35,7 +35,7 @@ final class DirectiveBuilder {
      */
     static Directive build(
         String keyword, LanguageKind kind, List<String> strings, String model, boolean hasRange,
-        SourcePosition position
+        SourceRange position
     ) {
         return switch (keyword) {
             case "language-default" -> new Directive.LanguageDefault(kind, strings.get(0), position);

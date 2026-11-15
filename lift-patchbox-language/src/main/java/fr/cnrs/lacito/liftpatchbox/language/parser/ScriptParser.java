@@ -8,7 +8,7 @@ import fr.cnrs.lacito.liftpatchbox.language.error.SyntaxErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
 import java.io.IOException;
 import java.nio.charset.StandardCharsets;
@@ -104,7 +104,7 @@ public final class ScriptParser {
                 "the surface syntax of " + source + " is not declared by a pragma and was not "
                     + "given; pass --syntax, use a .liftpatchref or .liftpatchshort extension, or write "
                     + "%liftpatch 1.1 syntax=\"LiftPatchRef\"",
-                SourcePosition.UNKNOWN)));
+                SourceRange.UNKNOWN)));
         }
         LOGGER.log(Level.FINE, () ->
             "Parsing " + source + " as " + effective.pragmaName());
@@ -167,7 +167,9 @@ public final class ScriptParser {
      */
     private SourceScript parseReference(String text, String source, List<LiftPatchError> errors) {
         LiftPatchRefLexer lexer = new LiftPatchRefLexer(CharStreams.fromString(text));
-        CollectingErrorListener listener = new CollectingErrorListener();
+        TextIndex index = new TextIndex(text);
+        CollectingErrorListener listener = new CollectingErrorListener(
+            (start, end) -> index.range(index.utf16(start), index.utf16(end)));
         lexer.removeErrorListeners();
         lexer.addErrorListener(listener);
         LiftPatchRefParser parser = new LiftPatchRefParser(new CommonTokenStream(lexer));
@@ -178,7 +180,7 @@ public final class ScriptParser {
         parser.addParseListener(strategy.listener());
         LiftPatchRefParser.ScriptContext tree = parser.script();
         errors.addAll(listener.errors());
-        return new RefScriptVisitor(source).buildScript(tree, errors);
+        return new RefScriptVisitor(source, index).buildScript(tree, errors);
     }
 
     /**
@@ -233,7 +235,7 @@ public final class ScriptParser {
             SyntaxErrorCode.UNSUPPORTED_LANGUAGE_VERSION,
             "this implementation supports LiftPatch " + SUPPORTED_VERSION
                 + ", and the script declares " + pragma.version(),
-            pragma.position());
+            pragma.range());
     }
 
     /**
@@ -252,7 +254,7 @@ public final class ScriptParser {
                     SyntaxErrorCode.UNKNOWN_PRAGMA_ATTRIBUTE,
                     "the version pragma of LiftPatch 1.1 carries `sigil`, `metamodel` and "
                         + "`syntax`, and no other attribute; found `" + name + "`",
-                    pragma.position()));
+                    pragma.range()));
             }
         }
         String required = pragma.metamodel();
@@ -261,7 +263,7 @@ public final class ScriptParser {
                 SyntaxErrorCode.UNSUPPORTED_METAMODEL,
                 "the script requires the metamodel `" + required + "`, and the one loaded is `"
                     + (metamodel.metamodelId() == null ? "1.0" : metamodel.metamodelId()) + "`",
-                pragma.position()));
+                pragma.range()));
         }
     }
 }

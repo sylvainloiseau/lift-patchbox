@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 
 /**
  * One element of the parenthesized list of a {@code create} or an {@code upsert}.
@@ -19,16 +19,16 @@ public sealed interface Initializer
      *
      * @return the source position
      */
-    SourcePosition position();
+    SourceRange range();
 
     /**
      * {@code property = value}, the ordinary initializer.
      *
      * @param property the property initialized
      * @param value    the value assigned
-     * @param position where the initializer was written
+     * @param range    where the initializer was written
      */
-    record Assignment(PropertyRef property, Value value, SourcePosition position)
+    record Assignment(PropertyRef property, Value value, SourceRange range)
         implements Initializer {
 
         /**
@@ -39,7 +39,7 @@ public sealed interface Initializer
          * @return the initializer
          */
         public static Assignment of(PropertyRef property, Value value) {
-            return new Assignment(property, value, SourcePosition.UNKNOWN);
+            return new Assignment(property, value, SourceRange.UNKNOWN);
         }
 
         @Override
@@ -57,8 +57,8 @@ public sealed interface Initializer
     record Condition(Predicate predicate) implements Initializer {
 
         @Override
-        public SourcePosition position() {
-            return predicate.position();
+        public SourceRange range() {
+            return predicate.range();
         }
 
         @Override
@@ -76,8 +76,8 @@ public sealed interface Initializer
     record Embedded(Constructor constructor) implements Initializer {
 
         @Override
-        public SourcePosition position() {
-            return constructor.position();
+        public SourceRange range() {
+            return constructor.range();
         }
 
         @Override

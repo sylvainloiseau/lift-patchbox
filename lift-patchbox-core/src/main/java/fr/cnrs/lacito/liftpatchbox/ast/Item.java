@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.ast;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 
 /**
  * Anything a script or a block body may contain: a command, a block, or a
@@ -16,5 +16,5 @@ public sealed interface Item permits Command, Block, Directive {
      *
      * @return the source position
      */
-    SourcePosition position();
+    SourceRange range();
 }

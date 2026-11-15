@@ -1,6 +1,6 @@
 package fr.cnrs.lacito.liftpatchbox.language;
 
-import fr.cnrs.lacito.liftpatchbox.error.SourcePosition;
+import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
 import java.util.Map;
 
 /**
@@ -15,9 +15,9 @@ import java.util.Map;
  *
  * @param version    the declared version, such as {@code "1.1"}
  * @param attributes the named attributes, in the order written
- * @param position   where the pragma was written
+ * @param range      where the pragma was written
  */
-public record Pragma(String version, Map<String, String> attributes, SourcePosition position) {
+public record Pragma(String version, Map<String, String> attributes, SourceRange range) {
 
     /** The attribute declaring the concise-syntax line sigil. */
     public static final String SIGIL = "sigil";
@@ -31,7 +31,7 @@ public record Pragma(String version, Map<String, String> attributes, SourcePosit
      *
      * @param version    the declared version
      * @param attributes the named attributes
-     * @param position   where the pragma was written
+     * @param range      where the pragma was written
      */
     public Pragma {
         attributes = Map.copyOf(attributes);
