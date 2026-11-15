@@ -121,6 +121,8 @@ public final class LiftPatchEngine {
      * @param script the command model
      * @return the collected errors and warnings; free of errors when the script has
      *         no static error
+     *
+     * <p>Thread-safe once the engine is configured: each call has its own validator.</p>
      */
     public ErrorCollector validate(Script script) {
         return new SemanticValidator(metamodel).validate(script);

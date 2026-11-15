@@ -35,6 +35,9 @@ import org.antlr.v4.runtime.CommonTokenStream;
  * nothing — which is why plan mode reports {@code NO_COMMAND_RECOGNIZED} for a
  * document in which not one line was recognized, and why declaring the syntax on
  * the pragma is worth doing.</p>
+ *
+ * <p>A parser holds only its metamodel: one instance may parse several texts at once,
+ * from several threads; each call builds its own lexer, parser and error lists.</p>
  */
 public final class ScriptParser {
 

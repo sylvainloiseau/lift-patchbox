@@ -57,7 +57,8 @@ public final class Metamodel {
     /**
      * The metamodel of Appendix A, version 1.0, loaded from the bundled document.
      *
-     * <p>The document is parsed once and the result cached, since it is immutable.</p>
+     * <p>The document is parsed once and the result cached, since it is immutable; the
+     * cache is safe to read from several threads.</p>
      *
      * @return the standard metamodel
      * @throws UncheckedIOException if the bundled resource cannot be read

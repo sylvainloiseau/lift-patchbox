@@ -47,6 +47,20 @@ import java.util.regex.Pattern;
  *
  * <p>To list every syntax error and every static error of a script without running
  * it, and without catching an exception, use {@link #check} or {@link #checkFile}.</p>
+ *
+ * <h2>Threads</h2>
+ *
+ * <p>Once configured (the {@code with…} methods, which are not thread-safe), one
+ * instance may serve several threads at once: {@link #parse}, {@link #check} and
+ * {@link #validate} share no state between calls (each builds its own parser,
+ * validator and error lists over the immutable {@link Metamodel}), so an editor can
+ * check every document of a project in parallel. {@link #plan} and {@link #apply}
+ * change or read the dictionary given, which the caller confines to one thread, like
+ * every object of the dictionary model.</p>
+ *
+ * <p>The library logs the errors and warnings of a script at {@code FINE} only: they
+ * are results handed to the caller ({@link ScriptCheck}, {@link Plan},
+ * {@code LiftPatchException}), which reports them.</p>
  */
 public final class LiftPatchBox {
 
