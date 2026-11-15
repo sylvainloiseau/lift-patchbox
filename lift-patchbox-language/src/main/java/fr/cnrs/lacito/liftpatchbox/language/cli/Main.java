@@ -6,7 +6,6 @@ import fr.cnrs.lacito.liftpatchbox.language.ScriptCheck;
 import fr.cnrs.lacito.liftpatchbox.language.SourceScript;
 import fr.cnrs.lacito.liftpatchbox.language.Syntax;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
-import fr.cnrs.lacito.liftpatchbox.error.ErrorCollector;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchWarning;
@@ -195,9 +194,8 @@ public final class Main implements Callable<Integer> {
                 .withDefaultObjectLanguage(objectLanguage)
                 .withDefaultMetaLanguage(metaLanguage);
 
-            // A parse error is raised before the validator runs and is the one error
-            // the library does not log itself, so it is logged here. Everything else
-            // is logged where it is raised, and is not repeated below.
+            // The library logs the errors of a script at FINE only (they are results, not
+            // faults): the tool reports them itself.
             SourceScript script;
             try {
                 script = box.parseFile(commands, syntax == null ? null : syntax.syntax());
@@ -221,8 +219,9 @@ public final class Main implements Callable<Integer> {
             }
             return EXIT_OK;
         } catch (LiftPatchException e) {
-            // The validator and the executor log every error they raise, so it is
-            // not repeated here; only the outcome is stated.
+            for (LiftPatchError error : e.errors()) {
+                LOGGER.log(Level.SEVERE, error::format);
+            }
             System.err.println("The dictionary was left unchanged.");
             return EXIT_SCRIPT_ERROR;
         } catch (Exception e) {
@@ -236,23 +235,15 @@ public final class Main implements Callable<Integer> {
      * position, then the warnings.
      */
     private int check() {
-        // The validator logs each error as it records it; a check reports the
-        // errors itself, after the rules for a partly parsed script have been
-        // applied, so that logging is silenced for the duration of the check.
-        Logger collectorLogger = Logger.getLogger(ErrorCollector.class.getName());
-        Level saved = collectorLogger.getLevel();
         ScriptCheck result;
         try {
             LiftPatchBox box = new LiftPatchBox(loadMetamodel())
                 .withDefaultObjectLanguage(objectLanguage)
                 .withDefaultMetaLanguage(metaLanguage);
-            collectorLogger.setLevel(Level.OFF);
             result = box.checkFile(commands, syntax == null ? null : syntax.syntax());
         } catch (Exception e) {
             System.err.println("error: " + e.getMessage());
             return EXIT_IO_ERROR;
-        } finally {
-            collectorLogger.setLevel(saved);
         }
         for (LiftPatchError error : result.errors()) {
             LOGGER.log(Level.SEVERE, error::format);
@@ -303,8 +294,19 @@ public final class Main implements Callable<Integer> {
             System.out.println(plan.toJson());
             return;
         }
-        // The errors and warnings a plan carries were logged as they were raised,
-        // so they are not printed again here.
+        // The library logs the errors and warnings of a script at FINE only: they are
+        // reported here.
+        for (LiftPatchError error : plan.staticErrors()) {
+            LOGGER.log(Level.SEVERE, error::format);
+        }
+        for (fr.cnrs.lacito.liftpatchbox.engine.Operation op : plan.operations()) {
+            if (op.error() != null) {
+                LOGGER.log(Level.SEVERE, op.error()::format);
+            }
+        }
+        for (LiftPatchWarning warning : plan.warnings()) {
+            LOGGER.log(Level.WARNING, warning::format);
+        }
         if (!plan.isOk()) {
             System.err.println(planOnly
                 ? "The script would fail; nothing was changed."

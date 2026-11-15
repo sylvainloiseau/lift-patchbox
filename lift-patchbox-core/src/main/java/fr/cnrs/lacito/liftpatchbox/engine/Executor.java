@@ -176,7 +176,8 @@ public final class Executor {
         }
 
         if (failure != null) {
-            LOGGER.log(Level.SEVERE, failure::format);
+            // FINE: the failure is in the plan returned; see ErrorCollector.add.
+            LOGGER.log(Level.FINE, failure::format);
         }
         List<DanglingReference> dangling = failure == null ? findDanglingReferences() : List.of();
 
@@ -1375,11 +1376,11 @@ public final class Executor {
     }
 
     /**
-     * Record a warning and log it, so that a run is diagnosable from the log alone.
+     * Record a warning, and log it at FINE: it is in the plan returned.
      */
     private void warn(LiftPatchWarning warning) {
         warnings.add(warning);
-        LOGGER.log(Level.WARNING, warning::format);
+        LOGGER.log(Level.FINE, warning::format);
     }
 
     private TargetInfo targetInfo(ComponentRef ref, String label) {

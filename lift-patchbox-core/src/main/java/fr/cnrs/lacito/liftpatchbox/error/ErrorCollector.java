@@ -36,7 +36,9 @@ public final class ErrorCollector {
      */
     public void add(LiftPatchError error) {
         errors.add(error);
-        LOGGER.log(Level.SEVERE, error::format);
+        // FINE: an error of a script is a result handed to the caller, not a fault of
+        // the library; an editor validating at every keystroke would fill its log.
+        LOGGER.log(Level.FINE, error::format);
     }
 
     /**
@@ -58,7 +60,7 @@ public final class ErrorCollector {
      */
     public void add(LiftPatchWarning warning) {
         warnings.add(warning);
-        LOGGER.log(Level.WARNING, warning::format);
+        LOGGER.log(Level.FINE, warning::format);
     }
 
     /**
