@@ -3974,8 +3974,10 @@ error, so the line is safe on a sense that has no draft example.
 
 ## 4. Paths
 
-A path starts with a slash and is a sequence of slash-separated steps. Every
-path written in a command is a **parent path**: it names the parent of what the
+A path is a sequence of steps joined by `/` or `!` (section "4.1"). It begins
+with the root marker `/`, with a label (`$pig/x#1`), or — on an indented line
+only — directly with a step, which makes it relative to the block's component
+(section "3.3"). Every path written in a command is a **parent path**: it names the parent of what the
 command acts on, and never that thing itself. The **direct target** is always
 written after the path, outside it — as a constructor (`c`, `p`), as a
 parenthesized property list (`s`, `u`, `l`), or as a single *target step*
@@ -3983,9 +3985,12 @@ separated from the path by whitespace (`d`, `e`, and the source of `m`). The
 only paths that are not parent paths are the ones used as **reference values**
 (section "3.2"), which designate their own last step.
 
-Each step is made of a letter indicating the component type (or the full
-component name, section "2") followed by one or several predicates between square
-brackets, or by an ordinal.
+A step is one of:
+
+- a component code (or the full component name, section "2") followed by a predicate list between square brackets (section "4.3"), by an ordinal (section "4.2"), or by a type key (section "4.2.1");
+- the code or the name of a **singleton** component type alone (section "4.2.1");
+- an **abbreviated step**, a bare word or a quoted string standing for an entry form, a sense gloss or an example text according to its depth (section "6.1");
+- a **label**, `$name` (section "3.2").
 
 Three properties of a parent path govern everything in this section, and the
 first is the one most easily got wrong when passing between the two syntaxes:
