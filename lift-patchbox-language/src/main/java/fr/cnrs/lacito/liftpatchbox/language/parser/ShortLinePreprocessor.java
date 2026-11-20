@@ -462,8 +462,13 @@ public final class ShortLinePreprocessor {
         while (i < body.length() && isBareChar(body.charAt(i))) {
             i++;
         }
-        if (i == 0 || i >= body.length()) {
+        if (i == 0) {
             return false;
+        }
+        if (i >= body.length()) {
+            // A singleton step that ends the line: the bare target of an `e`
+            // (`e c`), admitted only on an indented line.
+            return indented && singletonTokens.contains(body);
         }
         char after = body.charAt(i);
         if (after == '(') {
@@ -479,10 +484,13 @@ public final class ShortLinePreprocessor {
         if (after == '[' || after == '#' || after == '^') {
             return true;
         }
-        // A relative path made of a singleton step alone, followed by the property
-        // list of an `s`, a `u` or an `l`: `s c (v = "Noun")` under a sense.
+        // A singleton step alone, followed by the property list of an `s`, a `u`
+        // or an `l` (`s c (v = "Noun")` under a sense), or by the label binding of
+        // an `e` (`e c as $category`).
         if ((after == ' ' || after == '\t') && singletonTokens.contains(body.substring(0, i))) {
-            return body.substring(i).stripLeading().startsWith("(");
+            String next = body.substring(i).stripLeading();
+            return next.startsWith("(") || next.equals("as") || next.startsWith("as ")
+                || next.startsWith("as\t");
         }
         return false;
     }

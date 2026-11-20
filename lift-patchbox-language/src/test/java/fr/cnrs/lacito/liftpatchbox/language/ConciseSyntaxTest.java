@@ -420,6 +420,38 @@ class ConciseSyntaxTest extends PatchTestSupport {
         }
 
         @Test
+        @DisplayName("let an ensure assert the category of the block's sense, and bind it")
+        void ensureTheCategoryOfTheBlockSense() {
+            assertEffects(
+                applyConcise("""
+                    e /e[f="mami", hn=1] s[g="pig"]
+                      e c as $category
+                      s $category (v = "Verb")
+                    """),
+                "replaced:value:Noun->Verb");
+        }
+
+        @Test
+        @DisplayName("let an ensure assert the category of the block's sense, with no label")
+        void ensureTheCategoryWithNoLabel() {
+            assertEffects(
+                applyConcise("""
+                    e /e[f="mami", hn=1] s[g="pig"]
+                      e c
+                    """));
+        }
+
+        @Test
+        @DisplayName("refuse to delete the category of the block's sense, rather than read it as prose")
+        void refuseToDeleteTheCategory() {
+            refusedConcise(ModelErrorCode.SINGLETON_CANNOT_BE_CREATED_OR_DELETED,
+                """
+                e /e[f="mami", hn=1] s[g="pig"]
+                  d c
+                """);
+        }
+
+        @Test
         @DisplayName("refuse a relative singleton step the block's component does not have")
         void refuseASingletonTheBlockComponentLacks() {
             refusedConcise(ModelErrorCode.ILLEGAL_PARENT,
