@@ -5,6 +5,8 @@ import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchError;
 import fr.cnrs.lacito.liftpatchbox.error.LiftPatchException;
 import fr.cnrs.lacito.liftpatchbox.error.SourceRange;
+import fr.cnrs.lacito.liftpatchbox.metamodel.ComponentKind;
+import fr.cnrs.lacito.liftpatchbox.metamodel.Metamodel;
 import java.util.ArrayList;
 import java.util.HashSet;
 import java.util.List;
@@ -19,7 +21,7 @@ import java.util.Set;
  * <ul>
  *   <li>the <strong>recognition rule</strong> of Part 3, section 1.1: a line is a
  *       command only when a command letter, optionally followed by {@code *}, is
- *       followed by whitespace and by a second token of one of five constrained
+ *       followed by whitespace and by a second token of one of six constrained
  *       shapes. A one-letter prefix alone is deliberately not enough, so that
  *       ordinary prose beginning with "c " is not mistaken for a command;</li>
  *   <li><strong>sigil mode</strong>: when the pragma declares a sigil, a line is a
@@ -52,8 +54,14 @@ public final class ShortLinePreprocessor {
     private final Set<Integer> failedLines = new HashSet<>();
 
     /**
+     * The codes and names of the singleton component types of the metamodel, which
+     * the sixth shape of the recognition rule admits as a relative path step.
+     */
+    private final Set<String> singletonTokens;
+
+    /**
      * A preprocessor for a document read from the named source, throwing at the
-     * first error.
+     * first error, against the standard metamodel.
      *
      * @param source the source name, used in diagnostics
      */
@@ -70,8 +78,34 @@ public final class ShortLinePreprocessor {
      *               first one
      */
     public ShortLinePreprocessor(String source, List<LiftPatchError> errors) {
+        this(source, errors, Metamodel.standard());
+    }
+
+    /**
+     * A preprocessor recording its errors, against the given metamodel, whose
+     * singleton component types decide one shape of the recognition rule.
+     *
+     * @param source    the source name, used in diagnostics
+     * @param errors    where the errors are recorded, or {@code null} to throw at the
+     *                  first one
+     * @param metamodel the metamodel the document is written against
+     */
+    public ShortLinePreprocessor(String source, List<LiftPatchError> errors, Metamodel metamodel) {
         this.source = source;
         this.errors = errors;
+        this.singletonTokens = singletonTokens(metamodel);
+    }
+
+    /** The code and the name of every singleton component type of the metamodel. */
+    private static Set<String> singletonTokens(Metamodel metamodel) {
+        Set<String> tokens = new HashSet<>();
+        for (String name : metamodel.componentTypeNames()) {
+            if (metamodel.componentType(name).filter(d -> d.kind() == ComponentKind.SINGLETON).isPresent()) {
+                tokens.add(name);
+                ShortCodes.componentCode(name).ifPresent(tokens::add);
+            }
+        }
+        return Set.copyOf(tokens);
     }
 
     /** Record an error, or throw it when no error list was given. */
@@ -412,10 +446,10 @@ public final class ShortLinePreprocessor {
      * the command letter.
      *
      * @param body     the text after the command letter and its marker
-     * @param indented whether the line is indented, which admits two further shapes
-     * @return whether the token is one of the five admitted shapes
+     * @param indented whether the line is indented, which admits three further shapes
+     * @return whether the token is one of the six admitted shapes
      */
-    private static boolean secondTokenLooksLikeACommand(String body, boolean indented) {
+    private boolean secondTokenLooksLikeACommand(String body, boolean indented) {
         char first = body.charAt(0);
         if (first == '/' || first == '$') {
             return true;
@@ -437,9 +471,20 @@ public final class ShortLinePreprocessor {
             // verb check is a semantic one and is left to the validator.
             return true;
         }
+        if (!indented) {
+            return false;
+        }
         // A relative path, or the bare target step of a `d` or an `e`, admitted
         // only on an indented line.
-        return indented && (after == '[' || after == '#' || after == '^');
+        if (after == '[' || after == '#' || after == '^') {
+            return true;
+        }
+        // A relative path made of a singleton step alone, followed by the property
+        // list of an `s`, a `u` or an `l`: `s c (v = "Noun")` under a sense.
+        if ((after == ' ' || after == '\t') && singletonTokens.contains(body.substring(0, i))) {
+            return body.substring(i).stripLeading().startsWith("(");
+        }
+        return false;
     }
 
     private static boolean isBareChar(char c) {

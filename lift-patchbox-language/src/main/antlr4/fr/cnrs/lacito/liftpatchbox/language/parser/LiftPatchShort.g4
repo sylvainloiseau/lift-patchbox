@@ -116,9 +116,10 @@ pathStep        : componentCode (LBRACK selector RBRACK | ORDINAL | LBRACK INT R
  * A bare or quoted token standing for an entry form, a sense gloss or an example
  * text (Part 3, section 6.1). Which of the three it is depends on the depth of
  * the step below the root, which the visitor counts; a token that is exactly the
- * code or the name of a singleton component type admissible at that point is a
- * `componentCode` step instead, and rule 5 of Part 3, section 2 is applied by
- * the visitor, not here.
+ * code or the name of a singleton component type admissible at that point -- or,
+ * where the depth is not written down (a relative path, a step below a label),
+ * of any singleton component type -- is a singleton step instead, and rule 5 of
+ * Part 3, section 2 is applied by the visitor, not here.
  */
 abbreviatedStep : (bareWord | string) (ATSIGN lang)? ;
 

@@ -151,7 +151,7 @@ public final class ShortScriptParser {
      *         version pragma
      */
     public SourceScript parse(String document, List<LiftPatchError> errors) {
-        ShortLinePreprocessor.Scan scan = new ShortLinePreprocessor(source, errors).scan(document);
+        ShortLinePreprocessor.Scan scan = new ShortLinePreprocessor(source, errors, metamodel).scan(document);
         index = scan.index();
         operationCounter = 0;
 
@@ -1040,8 +1040,9 @@ public final class ShortScriptParser {
         }
 
         // An abbreviated step -- unless the token is exactly the code or the name of
-        // a singleton component type admissible at this point (Part 3, section 2,
-        // rule 5). A quoted token is always an abbreviated step.
+        // a singleton component type admissible at this point, or stands where the
+        // depth from the root is not written down and no abbreviated step could be
+        // (Part 3, section 2, rule 5). A quoted token is always an abbreviated step.
         LiftPatchShortParser.AbbreviatedStepContext abbrev = ctx.abbreviatedStep();
         boolean quoted = abbrev.string() != null;
         String token = quoted
@@ -1050,7 +1051,9 @@ public final class ShortScriptParser {
         String language = abbrev.lang() == null ? null : abbrev.lang().getText();
 
         if (!quoted && language == null) {
-            Optional<String> singleton = singletonNamed(token, parentType);
+            Optional<String> singleton = depth < 1
+                ? singletonType(token)
+                : singletonNamed(token, parentType);
             if (singleton.isPresent()) {
                 return new StepResult(
                     new Step.Component(singleton.get(), List.of(), null, null, null, where),
@@ -1085,6 +1088,22 @@ public final class ShortScriptParser {
      * a child at this point of the path.
      */
     private Optional<String> singletonNamed(String token, String parentType) {
+        Optional<String> name = singletonType(token);
+        if (name.isEmpty() || parentType == null) {
+            return Optional.empty();
+        }
+        return metamodel.isLegalParent(parentType, name.get()) ? name : Optional.empty();
+    }
+
+    /**
+     * The singleton component type a bare token is the code or the name of, if any.
+     * Where the depth from the root is not written down -- a relative path, a path
+     * rooted at a label, a bare target step inside a block -- no abbreviated step is
+     * legal, so such a token can only be the singleton step; whether its type is a
+     * child of the component above it is then checked by the validator, as for any
+     * other step.
+     */
+    private Optional<String> singletonType(String token) {
         Optional<String> name = ShortCodes.componentName(token);
         if (name.isEmpty()) {
             return Optional.empty();
@@ -1093,10 +1112,7 @@ public final class ShortScriptParser {
         if (def.isEmpty() || def.get().kind() != ComponentKind.SINGLETON) {
             return Optional.empty();
         }
-        if (parentType == null) {
-            return Optional.empty();
-        }
-        return metamodel.isLegalParent(parentType, name.get()) ? name : Optional.empty();
+        return name;
     }
 
     private String typeKeyValue(LiftPatchShortParser.TypeKeyContext ctx) {

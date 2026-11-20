@@ -107,6 +107,39 @@ class ConciseSyntaxTest extends PatchTestSupport {
         void aMistypedCommandIsAnError() {
             refusedConcise(ModelErrorCode.SYNTAX_ERROR, "c /e[f=\"memi\" s(g=\"puppy\")\n");
         }
+
+        @Test
+        @DisplayName("a singleton step followed by a property list is a command on an indented line")
+        void anIndentedSingletonStepIsACommand() {
+            // Recognized, and so refused rather than silently dropped as prose.
+            refusedConcise(ModelErrorCode.PROPERTY_DOES_NOT_EXIST_ON_COMPONENT_TYPE,
+                """
+                c /memi s("cat")
+                  s c (category = "Noun")
+                """);
+        }
+
+        @Test
+        @DisplayName("a singleton step followed by a property list is prose at top level")
+        void aTopLevelSingletonStepIsProse() {
+            assertEffects(
+                applyConcise("""
+                    s c (v = "Noun") is prose, since only a block supplies the parent
+                    c /memi/puppy
+                    """),
+                "created:sense@2", "set:gloss@en=puppy");
+        }
+
+        @Test
+        @DisplayName("a bare word that names no singleton is not a relative path")
+        void anIndentedBareWordIsProse() {
+            assertEffects(
+                applyConcise("""
+                    c /memi s("cat")
+                      s cat (is prose: `cat` names no singleton)
+                    """),
+                "created:sense@2", "set:gloss@en=cat");
+        }
     }
 
     @Nested
@@ -262,6 +295,96 @@ class ConciseSyntaxTest extends PatchTestSupport {
                       d s[g="pig"] x#1
                     """),
                 "deleted:example@1");
+        }
+
+        @Test
+        @DisplayName("let a property command reach the category of a sense just created")
+        void setTheCategoryOfACreatedSense() {
+            assertEffects(
+                applyConcise("""
+                    c e("mimi")
+                      c s("lizard")
+                        s c (v = "Noun")
+                    """),
+                "created:entry@null", "set:form@tww=mimi",
+                "created:sense@1", "set:gloss@en=lizard",
+                "set:value=Noun");
+        }
+
+        @Test
+        @DisplayName("accept the full singleton name and the full property name")
+        void acceptTheFullNames() {
+            assertEffects(
+                applyConcise("""
+                    c /memi s("cat")
+                      s category (value = "Noun")
+                    """),
+                "created:sense@2", "set:gloss@en=cat", "set:value=Noun");
+        }
+
+        @Test
+        @DisplayName("let set, update and clear reach the category of an existing sense")
+        void writeOnTheCategoryOfAnExistingSense() {
+            assertEffects(
+                applyConcise("""
+                    e /e[f="mami", hn=1] s[g="pig"]
+                      u c (v = "Verb")
+                      l c (v)
+                      s c (v = "Adjective")
+                    """),
+                "replaced:value:Noun->Verb", "removed:value=Verb", "set:value=Adjective");
+        }
+
+        @Test
+        @DisplayName("agree with the rooted path to the same category")
+        void agreeWithTheRootedPath() {
+            assertEffects(applyConcise("s /e[f=\"mami\", hn=1]!s[g=\"pig\"]/c (v = \"Verb\")\n"),
+                "replaced:value:Noun->Verb");
+            newDictionary();
+            assertEffects(
+                applyConcise("""
+                    e /e[f="mami", hn=1] s[g="pig"]
+                      s c (v = "Verb")
+                    """),
+                "replaced:value:Noun->Verb");
+        }
+
+        @Test
+        @DisplayName("let a block's sense host both its category and its other children")
+        void mixTheCategoryWithOtherCommands() {
+            assertEffects(
+                applyConcise("""
+                    c e("mimi")
+                      c s("lizard")
+                        s c (v = "Noun")
+                        s (d@en = "A lizard")
+                        c x("a mimi jefi")
+                    """),
+                "created:entry@null", "set:form@tww=mimi",
+                "created:sense@1", "set:gloss@en=lizard",
+                "set:value=Noun", "set:definition@en=A lizard",
+                "created:example@1", "set:text@tww=a mimi jefi");
+        }
+
+        @Test
+        @DisplayName("reach the category through a relative path of several steps")
+        void reachTheCategoryThroughALongerRelativePath() {
+            assertEffects(
+                applyConcise("""
+                    e /e[f="mami", hn=1]
+                      s s[g="pork"]/c (v = "Verb")
+                    """),
+                "replaced:value:Noun->Verb");
+        }
+
+        @Test
+        @DisplayName("refuse a relative singleton step the block's component does not have")
+        void refuseASingletonTheBlockComponentLacks() {
+            refusedConcise(ModelErrorCode.ILLEGAL_PARENT,
+                """
+                e /memi
+                  s c (v = "Noun")
+                """);
         }
 
         @Test

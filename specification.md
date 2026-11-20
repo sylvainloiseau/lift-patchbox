@@ -1,6 +1,6 @@
 ---
 Author: Sylvain Loiseau
-Last edit: 2026/11/14
+Last edit: 2026/11/20
 Version: 1.1
 Title: "LiftPatch: a mutation language for the LIFT data model"
 ---
@@ -3386,7 +3386,8 @@ whitespace, it matches one of the following:
    - `$` — a label (`s $pig (d@en = "A pig")`), or
    - a component letter (or component name) immediately followed by `(` — a constructor with no parent path, which only `c` and `p` accept (`c e("mami")`, `p entry(f="mami", has-gloss="pig")`), or
    - `(` — the parenthesis of a property command with no path, which is admitted **only on an indented line**, where the parent is supplied by the enclosing indented block (`s (d@en = "A pig")`, section "3.3"), or
-   - a component letter (or component name) immediately followed by `[`, `#` or `^` — a *relative path*, or the bare target step of a `d` or an `e`, also admitted **only on an indented line**, whose first step is a child of the enclosing indented block's component (`d x#1`, `d n^draft`, `d s[g="pig"] x#1`, section "3.3").
+   - a component letter (or component name) immediately followed by `[`, `#` or `^` — a *relative path*, or the bare target step of a `d` or an `e`, also admitted **only on an indented line**, whose first step is a child of the enclosing indented block's component (`d x#1`, `d n^draft`, `d s[g="pig"] x#1`, section "3.3"), or
+   - the code or the name of a **singleton** component type (section "2", rule 5), followed by whitespace and `(` — a *relative path* made of that singleton step alone, followed by the property list of an `s`, a `u` or an `l`, also admitted **only on an indented line**, where the singleton is the child of the enclosing indented block's component (`s c (v = "Noun")` under a sense, section "3.3"). The set of singleton types is fixed by the metamodel, so this shape is decided by the token alone.
 2. a directive of Part 1, sections "2.1.1" and "2.1.3" to "2.1.5", written exactly as in the reference syntax: `language-default `, `language-create ` or `language-delete ` followed by `object` or `meta`; or one of the declaration keywords `feature-set-create`, `feature-set-delete`, `feature-set-rename`, `feature-create`, `feature-delete`, `feature-rename`, `field-create`, `field-delete`, `trait-create`, `trait-delete`, followed by whitespace and a quoted name. The quote is what keeps a prose line beginning with "feature-create" from being taken for a directive.
 
 ```
@@ -3399,15 +3400,15 @@ trait-create "variant-type" model = option range = "variant-type"
 
 3. the version pragma `%liftpatch 1.1`, anywhere before the first command line of the document; a pragma declaring a `sigil` must be the first non-blank line (section "1.1").
 
-Every command has a second token of one of the five shapes of rule 1: `c` and
+Every command has a second token of one of the six shapes of rule 1: `c` and
 `p` take either a path or a constructor; `s`, `u` and `l` take a path; `d`, `e`
 and `m` take either a parent path or — when their direct target is an entry or a
 label, and so has no parent path — a **rooted target step**; and in every case
 that second token begins with `/` or with a label, so the recognition rule itself
 is unchanged. On an indented line a property command may take its parenthesis
-directly, `c` or `p` its constructor, and `d` or `e` a relative path or a bare
-target step, because the enclosing indented block supplies the parent (section
-"3.3").
+directly or a relative path, `c` or `p` its constructor, and `d` or `e` a
+relative path or a bare target step, because the enclosing indented block
+supplies the parent (section "3.3").
 
 **Leading whitespace is significant.** It does not change whether a line is a
 command — the rule above skips it — but it decides which component the command
@@ -3494,7 +3495,7 @@ Some commands, components, and properties are abbreviated by the same letter (fo
 2. A letter immediately followed by `[`, `#`, `^` or `(` and appearing either inside a path (after `/` or `!`), or in direct-target position — the target step of a `d`, an `e` or the source of an `m` (section "4.1") — or as the head of an initializer, is a **component** letter.
 3. A letter appearing inside square brackets or inside a parenthesized list, and followed by (optional whitespace) `=`, `@`, `,` or `)`, is a **property** letter. All four terminators matter, the comma included: in the `clear` list `l /mami/pig/a[y="edit", v="todo"] (w, h)`, the property `w` (`when`) is followed by a comma and by nothing else, and in `l /mami/pig/c (v)` the property `v` (`value`) is followed only by the closing parenthesis.
 4. A letter followed by `(` inside an initializer list is a **component** letter opening an embedded initializer (section "7"); the same letter followed by `=`, possibly after whitespace, is a property letter. One token of look-ahead therefore suffices.
-5. A token that is exactly the code or the full name of a **singleton** component type (Part 1, section "3.1"), that stands where a path step is expected, and whose type the metamodel admits as a child of the component the preceding step resolved, is a **component** token naming that singleton. This is the one component step followed by nothing, and the rule is decidable because the set of singleton types and the parentage table are both fixed by the metamodel. Where the rule does not apply — no singleton of that name is admissible at that point — the token is an abbreviated step, that is a bare word (section "6.1"). A quoted token is **always** an abbreviated step: write `/mami/pig/"c"` for an example whose text is `"c"`, and `/mami/pig/c` for the category of that sense.
+5. A token that is exactly the code or the full name of a **singleton** component type (Part 1, section "3.1"), that stands where a path step is expected, and whose type the metamodel admits as a child of the component the preceding step resolved, is a **component** token naming that singleton. This is the one component step followed by nothing, and the rule is decidable because the set of singleton types and the parentage table are both fixed by the metamodel. Where the depth from the root is not written down — the first step of a **relative** path inside an indented block, a step below a **label**, a bare target step inside a block (section "6.1") — no abbreviated step is legal, so a token that is exactly the code or the name of a singleton type is always the singleton step there, whatever its parent; whether that type is a child of the component above it is then checked as for any other step, and `ILLEGAL_PARENT` is raised when it is not. Elsewhere, where the rule does not apply — no singleton of that name is admissible at that point — the token is an abbreviated step, that is a bare word (section "6.1"). A quoted token is **always** an abbreviated step: write `/mami/pig/"c"` for an example whose text is `"c"`, and `/mami/pig/c` for the category of that sense.
 
 **Full names as aliases.** Anywhere a one-letter component code or property code
 is expected, the full reference-syntax name may be written instead: `entry` for
@@ -3515,7 +3516,7 @@ bare entry form `"e"` (section "6.1").
 
 **The one exception is a singleton.** A singleton component (Part 1, section
 "3.1") is written with its name alone, so it is the one component step that is
-followed by nothing. Rule 5 below settles it, and section "6.1" states the
+followed by nothing. Rule 5 above settles it, and section "6.1" states the
 consequence for abbreviated steps.
 
 ### 2.1 Command codes
@@ -3785,7 +3786,9 @@ l <path> (<property> {, <property>})
 
 On an **indented** line the path of a property command may be omitted, and the
 command then applies to the component of the enclosing indented block (section
-"3.1"): `s (d@en = "A pig")`. Outside an indented block the path is mandatory, and a
+"3.3"): `s (d@en = "A pig")`. It may also be **relative**, its first step a child
+of that component: `s c (v = "Noun")` writes on the category of the block's
+sense, and `s x#1 (t = "a mami jefi")` on its first example. Outside an indented block the path is mandatory, and a
 property command written without one — like a component command other than an
 `entry` written without a parent — is rejected with `MISSING_PARENT_CLAUSE`, a
 static error.
@@ -3865,6 +3868,7 @@ transaction boundary:
 ```LiftPatchShort
 c /mami
   c s("pig")
+    s c (v = "Noun")
     s (d@en = "A four-legged terrestrial animal")
     c x("a mami jefi")
       c o("free", "I shot a pig")
@@ -3889,7 +3893,7 @@ run, so:
 
 #### What an indented command may omit
 
-Inside a block, the parent is given, so the command need not name it. Four
+Inside a block, the parent is given, so the command need not name it. Five
 forms become available, and they are the forms the recognition rule of section
 "1.1" admits only on an indented line:
 
@@ -3897,8 +3901,18 @@ forms become available, and they are the forms the recognition rule of section
 |---|---|---|
 | no path | `c s("pig")` | create under the block's component |
 | no path | `s (d@en = "A pig")` | set on the block's component |
+| relative path | `s c (v = "Noun")` | set on the component a relative path designates, its first step a **child** of the block's component — here the singleton `category` of the block's sense |
 | target only | `d x#1` | a target step that is a **child** of the block's component |
 | relative path + target | `d s[g="pig"] x#1` | a parent path whose first step is a **child** of the block's component, and the target below it |
+
+The relative form of a property command is what lets a block write on a component
+that already exists without naming it from the root. The common case is the
+grammatical category of a sense just created: the `category` comes into existence
+with its sense (Part 1, section "3.1"), so it is never created, and its `value` is
+set with `s c (v = "Noun")` on a line indented under the `c s(…)` that created the
+sense. A singleton step alone is the one relative path that has no `[`, `#` or
+`^` after its first letter; the recognition rule of section "1.1" admits it
+followed by the property list.
 
 A path that begins with `/` keeps its ordinary meaning inside a block: it is
 resolved from the root, exactly as at top level. The two are therefore never
@@ -3924,6 +3938,7 @@ The block above is exactly:
 ```LiftPatchRef
 create entry(form@tww = "mami") {
   create sense(gloss@en = "pig") {
+    set value = "Noun" on category
     set definition@en = "A four-legged terrestrial animal"
     create example(text@tww = "a mami jefi") {
       create translation(type = "free", text@en = "I shot a pig")
@@ -4159,7 +4174,7 @@ d /e[f="mami"] n^draft
 
 - The **type key** `^t` takes a bare word (section "6.1.1") or a quoted string: `n^general` and `n^"field note"` are both steps. It cannot occur together with a predicate list in the same step — `n[t@en="…"]^general` is a syntax error — and it is available on **typed** component types only, raising `COMPONENT_NOT_TYPED` elsewhere. Like the ordinal, it selects and never creates, so it may not appear on a constructor: `c /mami n^general(t@en = "…")` is a syntax error, and the `type` is written as an ordinary initializer, `c /mami n(y="general", t@en = "…")`.
 - The **singleton step** is the component code or name alone, with nothing after it. It is the one path step with no suffix and no brackets, and rule 5 of section "2" is what tells it apart from an abbreviated step: `/mami/pig/c` is the category of the sense "pig", while `/mami/pig/"c"` is the example whose text is `"c"`. A singleton step carrying a selector in a unique position — `/mami/pig/c[v="Noun"]` as the parent path of a command — raises `SINGLETON_TAKES_NO_SELECTOR`; inside a `has` predicate or on the parent side of a `/` link the same spelling is a filtering step and is legal: `d /e[f="mami", has s[has c[v="Verb"]]] s[g="pig"]`.
-- A singleton is never created, never deleted and never moved, so `c /mami/pig c(v="Noun")`, `d /mami/pig c` and any `m` naming one raise `SINGLETON_CANNOT_BE_CREATED_OR_DELETED`. Write the property command instead: `s /mami/pig/c (v = "Noun")`.
+- A singleton is never created, never deleted and never moved, so `c /mami/pig c(v="Noun")`, `d /mami/pig c` and any `m` naming one raise `SINGLETON_CANNOT_BE_CREATED_OR_DELETED`. Write the property command instead: `s /mami/pig/c (v = "Noun")`, or, on a line indented under the command that creates or designates the sense, `s c (v = "Noun")` (section "3.3").
 
 ### 4.3 Predicates in a step
 
@@ -4572,7 +4587,7 @@ list of depths is exhaustive:**
 
 - The depth is counted from the root **across the parent path and the direct target together** (section "4.1"), and nothing else decides it: the target step of `d /mami/pig "a mami jefi"` is at depth 3 and is the abbreviated example, exactly as the last step of the parent path of `c /mami/pig/"a mami jefi" o("free", "…")` is. A target step that is not separated from the path — there is none, since a target is exactly one step — never changes the count, and neither does the shape of the earlier steps: `/e[f="mami"]/pig` is a legal path whose second step is the abbreviated sense, and `/mami/s[g="pig"]/"a mami jefi"` is legal too.
 - A bare or quoted step at depth 4 or deeper raises `ABBREVIATED_STEP_NOT_ALLOWED_HERE`, a static error, so `d /mami/pig/"a mami jefi" foo` is rejected: its target step is at depth 4. There is no abbreviation below the example, because below it the component type is no longer determined by the depth: a sense may hold an example, a note, a field, an illustration and more.
-- A bare token that is exactly the code or the name of a **singleton** component type admissible at that point is a singleton step and never an abbreviated step (section "2", rule 5). At depth 3 under a sense this is the only collision the language has, and quoting resolves it: `/mami/pig/c` is the category of that sense, `/mami/pig/"c"` the example whose text is `"c"`. A quoted token is always an abbreviated step.
+- A bare token that is exactly the code or the name of a **singleton** component type admissible at that point is a singleton step and never an abbreviated step (section "2", rule 5). At depth 3 under a sense this is the only collision the language has, and quoting resolves it: `/mami/pig/c` is the category of that sense, `/mami/pig/"c"` the example whose text is `"c"`. A quoted token is always an abbreviated step. Where no abbreviated step is legal (next rule), the token is the singleton step whatever its parent: `s c (v = "Noun")` on an indented line, and `$pig!c`.
 - Abbreviated steps are available only where the depth from the root is written down, that is in a path opened by the root marker `/` whose first step is at depth 1, and in the target step that follows such a path. In a **relative** path inside an indented block (section "3.3"), in a bare target step inside one, and in a path that begins with a **label**, the depth from the root is not written down, so every step must name its component type; a bare or quoted step there raises the same error.
 
 #### 6.1.1 The bare word
@@ -5505,9 +5520,9 @@ Four productions are ambiguous on their own and are disambiguated by the rules o
 Part 3, sections "1.1", "2" and "4.1", which a parser MUST apply:
 
 - `target-spec`: the `[ path spaces ]` and the final `path-step` are separated by whitespace, and the **last top-level whitespace-separated path token** of the command, before any `to`, `at` or `as` clause, is the `path-step`; everything before it is the `path` (Part 3, section "4.1"). Top-level means outside every bracket, parenthesis, brace and quoted string, so whitespace inside a selector never splits a token. The optional `'/'` before that `path-step` is the root marker, and may be written only when no `path` precedes it.
-- `command-line` versus `prose-line`: a line is a command only if it satisfies the recognition rule of section "1.1" — command letter, optional `*`, whitespace, then a token beginning with `/`, with `$`, with a component code immediately followed by `(`, or — on an indented line only — with `(` or with a component code immediately followed by `[`, `#` or `^`. When a sigil is declared, a line is a command **if and only if** it begins, after optional whitespace, with that sigil; the `[ sigil ]` of the `command-line` production is optional only because one production covers both modes. A line that matches the rule but does not parse is an error, never prose.
+- `command-line` versus `prose-line`: a line is a command only if it satisfies the recognition rule of section "1.1" — command letter, optional `*`, whitespace, then a token beginning with `/`, with `$`, with a component code immediately followed by `(`, or — on an indented line only — with `(`, with a component code immediately followed by `[`, `#` or `^`, or with the code or the name of a singleton component type followed by whitespace and `(`. When a sigil is declared, a line is a command **if and only if** it begins, after optional whitespace, with that sigil; the `[ sigil ]` of the `command-line` production is optional only because one production covers both modes. A line that matches the rule but does not parse is an error, never prose.
 - `component-code` versus `abbreviated-step` and `property-code` versus a value: one character of look-ahead decides. A letter followed by `[`, `#`, `^` or `(` is a component code; a letter followed by `=`, `@`, `,` or `)` is a property code; anything else in a path step is a bare word, that is an abbreviated step (Part 3, section "6.1").
-- `singleton-step` versus `abbreviated-step`: a bare token followed by none of those characters is a `singleton-step` when it is exactly the code or the name of a **singleton** component type that the metamodel admits as a child at that point of the path, and an `abbreviated-step` otherwise; a **quoted** token is always an `abbreviated-step` (Part 3, section "2", rule 5). `/mami/pig/c` is therefore the category of that sense and `/mami/pig/"c"` the example whose text is `"c"`.
+- `singleton-step` versus `abbreviated-step`: a bare token followed by none of those characters is a `singleton-step` when it is exactly the code or the name of a **singleton** component type that the metamodel admits as a child at that point of the path, or — where the depth from the root is not written down, in a `relative-path`, below a `label-ref` or in a bare target step inside a block — of any singleton component type, its parentage then being checked like any step's (`ILLEGAL_PARENT`); it is an `abbreviated-step` otherwise; a **quoted** token is always an `abbreviated-step` (Part 3, section "2", rule 5). `/mami/pig/c` is therefore the category of that sense and `/mami/pig/"c"` the example whose text is `"c"`.
 
 Eleven further constraints are not expressed by the grammar and are static errors:
 
@@ -6380,7 +6395,29 @@ implementation MAY add cases; it MUST pass these.
     "description": "a value the dictionary uses but its feature set does not declare is declared, once",
     "dictionary": "standard",
     "script": "feature-create \"Noun\" in \"grammatical-info\"\nfeature-create \"Noun\" in \"grammatical-info\"",
-    "expect": { "status": "error", "code": "DECLARATION_ALREADY_EXISTS", "kind": "dynamic", "commandIndex": 2 } }
+    "expect": { "status": "error", "code": "DECLARATION_ALREADY_EXISTS", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-107", "section": "Part 3, 3.3", "syntax": "LiftPatchShort",
+    "description": "an indented property command reaches the category of a sense just created by its singleton step alone",
+    "dictionary": "standard",
+    "script": "c /memi s(\"cat\")\n  s c (v = \"Noun\")",
+    "expect": { "status": "ok", "effects": [
+      { "kind": "componentCreated", "componentType": "sense", "position": 2 },
+      { "kind": "propertySet", "property": "gloss", "language": "en", "oldValue": null, "newValue": "cat" },
+      { "kind": "propertySet", "property": "value", "language": null, "oldValue": null, "newValue": "Noun" } ] } },
+
+  { "id": "C-108", "section": "Part 3, 3.3", "syntax": "LiftPatchShort",
+    "description": "an indented property command reaches the category of an existing sense by its singleton step alone",
+    "dictionary": "standard",
+    "script": "e /e[f=\"mami\", hn=1] s[g=\"pig\"]\n  s c (v = \"Verb\")",
+    "expect": { "status": "ok", "effects": [
+      { "kind": "propertyReplaced", "property": "value", "language": null, "oldValue": "Noun", "newValue": "Verb" } ] } },
+
+  { "id": "C-109", "section": "Part 3, 2", "syntax": "LiftPatchShort",
+    "description": "a relative singleton step is checked against the block's component like any other step",
+    "dictionary": "standard",
+    "script": "e /memi\n  s c (v = \"Noun\")",
+    "expect": { "status": "error", "code": "ILLEGAL_PARENT", "kind": "static", "commandIndex": 2 } }
 ]
 ```
 

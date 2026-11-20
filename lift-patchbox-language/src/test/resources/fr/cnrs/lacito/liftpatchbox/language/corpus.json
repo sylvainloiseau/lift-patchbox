@@ -735,5 +735,27 @@
     "description": "a value the dictionary uses but its feature set does not declare is declared, once",
     "dictionary": "standard",
     "script": "feature-create \"Noun\" in \"grammatical-info\"\nfeature-create \"Noun\" in \"grammatical-info\"",
-    "expect": { "status": "error", "code": "DECLARATION_ALREADY_EXISTS", "kind": "dynamic", "commandIndex": 2 } }
+    "expect": { "status": "error", "code": "DECLARATION_ALREADY_EXISTS", "kind": "dynamic", "commandIndex": 2 } },
+
+  { "id": "C-107", "section": "Part 3, 3.3", "syntax": "LiftPatchShort",
+    "description": "an indented property command reaches the category of a sense just created by its singleton step alone",
+    "dictionary": "standard",
+    "script": "c /memi s(\"cat\")\n  s c (v = \"Noun\")",
+    "expect": { "status": "ok", "effects": [
+      { "kind": "componentCreated", "componentType": "sense", "position": 2 },
+      { "kind": "propertySet", "property": "gloss", "language": "en", "oldValue": null, "newValue": "cat" },
+      { "kind": "propertySet", "property": "value", "language": null, "oldValue": null, "newValue": "Noun" } ] } },
+
+  { "id": "C-108", "section": "Part 3, 3.3", "syntax": "LiftPatchShort",
+    "description": "an indented property command reaches the category of an existing sense by its singleton step alone",
+    "dictionary": "standard",
+    "script": "e /e[f=\"mami\", hn=1] s[g=\"pig\"]\n  s c (v = \"Verb\")",
+    "expect": { "status": "ok", "effects": [
+      { "kind": "propertyReplaced", "property": "value", "language": null, "oldValue": "Noun", "newValue": "Verb" } ] } },
+
+  { "id": "C-109", "section": "Part 3, 2", "syntax": "LiftPatchShort",
+    "description": "a relative singleton step is checked against the block's component like any other step",
+    "dictionary": "standard",
+    "script": "e /memi\n  s c (v = \"Noun\")",
+    "expect": { "status": "error", "code": "ILLEGAL_PARENT", "kind": "static", "commandIndex": 2 } }
 ]
