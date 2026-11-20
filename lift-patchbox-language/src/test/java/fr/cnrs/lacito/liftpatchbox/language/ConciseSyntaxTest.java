@@ -179,12 +179,20 @@ class ConciseSyntaxTest extends PatchTestSupport {
         }
 
         @Test
-        @DisplayName("a property command may write its immediate parent as a separate step")
-        void aPropertyCommandMayWriteItsParentSeparately() {
+        @DisplayName("a property command joins the component it writes on to its path")
+        void aPropertyCommandJoinsItsComponentToThePath() {
             applyConcise("c /memi n(y=\"general\", t@en = \"recorded at Yakoro\")");
             assertEffects(
-                applyConcise("u /memi n^general (t@en = \"recorded at Yakoro, 2025\")"),
+                applyConcise("u /memi!n^general (t@en = \"recorded at Yakoro, 2025\")"),
                 "replaced:text@en:recorded at Yakoro->recorded at Yakoro, 2025");
+        }
+
+        @Test
+        @DisplayName("a property command does not write its component apart from the path")
+        void aPropertyCommandRefusesASeparateStep() {
+            applyConcise("c /memi n(y=\"general\", t@en = \"recorded at Yakoro\")");
+            refusedConcise(ModelErrorCode.SYNTAX_ERROR,
+                "u /memi n^general (t@en = \"recorded at Yakoro, 2025\")");
         }
 
         @Test

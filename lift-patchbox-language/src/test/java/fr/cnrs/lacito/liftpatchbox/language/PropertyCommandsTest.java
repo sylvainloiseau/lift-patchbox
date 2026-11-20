@@ -352,13 +352,13 @@ class PropertyCommandsTest extends PatchTestSupport {
         @DisplayName("writing the type of a translation re-keys it and keeps its text")
         void reKeysATranslation() {
             assertEffects(
-                applyConcise("s /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"] "
-                    + "o^free (y = \"literal\")"),
+                applyConcise("s /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"]"
+                    + "!o^free (y = \"literal\")"),
                 "replaced:type:free->literal");
             // The component is re-keyed in place, so its text comes with it.
             assertEffects(
-                applyConcise("u /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"] "
-                    + "o^literal (t@en = \"I shot it\")"),
+                applyConcise("u /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"]"
+                    + "!o^literal (t@en = \"I shot it\")"),
                 "replaced:text@en:I shot a pig->I shot it");
         }
 
@@ -413,8 +413,8 @@ class PropertyCommandsTest extends PatchTestSupport {
             applyConcise("c /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"] "
                 + "o(\"literal\", \"I shot a pig, precisely\")");
             refusedConcise(ModelErrorCode.CANNOT_CREATE_DUPLICATE,
-                "s /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"] "
-                    + "o^free (y = \"literal\")");
+                "s /e[f=\"mami\", hn=1]!s[g=\"pig\"]!x[t=\"a mami jefi\"]"
+                    + "!o^free (y = \"literal\")");
         }
 
         @Test
@@ -495,7 +495,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         void refuseTheConciseSpelling() {
             aTrait();
             refusedConcise(ModelErrorCode.PROPERTY_IS_READ_ONLY,
-                "s /memi t^CVpattern (y = \"syllable\")");
+                "s /memi!t^CVpattern (y = \"syllable\")");
         }
 
         @Test
@@ -503,7 +503,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         void leaveTheRestWritable() {
             aTrait();
             assertEffects(
-                applyConcise("s /memi t^CVpattern (v = \"CVCV\")"),
+                applyConcise("s /memi!t^CVpattern (v = \"CVCV\")"),
                 "replaced:value:CVC->CVCV");
         }
 
@@ -541,7 +541,7 @@ class PropertyCommandsTest extends PatchTestSupport {
         void refuseTheTypeOfAFieldStatically() {
             // No field exists, so a dynamic check would raise NOT_FOUND first.
             LiftPatchError error = refusedConcise(ModelErrorCode.PROPERTY_IS_READ_ONLY,
-                "s /memi f^editorial (y = \"review\")");
+                "s /memi!f^editorial (y = \"review\")");
             assertTrue(error.kind() == ErrorKind.STATIC, "the check must be static");
         }
 

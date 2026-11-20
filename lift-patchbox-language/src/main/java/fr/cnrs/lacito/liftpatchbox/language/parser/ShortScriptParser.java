@@ -676,29 +676,19 @@ public final class ShortScriptParser {
                 "a `" + line.verb().code() + "` command ends with a parenthesized property list",
                 range(line, last), operationCounter + 1);
         }
-        if (main.size() > 3) {
+        if (main.size() > 2) {
+            // The component a property command writes on is the last step of its
+            // path, and the path is one token: `u /memi!n^general (…)`, never
+            // `u /memi n^general (…)` (Part 3, section 3.2).
             throw error(ModelErrorCode.SYNTAX_ERROR,
-                "a `" + line.verb().code() + "` command takes a path and at most one further step",
-                range(line, main.get(0)), operationCounter + 1);
+                "a `" + line.verb().code() + "` command takes one path before its property "
+                    + "list; join its steps with `/` or `!`",
+                range(line, main.get(1)), operationCounter + 1);
         }
         Chain target = null;
-        if (main.size() >= 2) {
+        if (main.size() == 2) {
             ParsedPath path = parsePath(main.get(0), line, startDepthOf(main.get(0)));
             target = path.toChain();
-            if (main.size() == 3) {
-                // `u /memi n^general (…)`: the immediate parent is written as a
-                // separate step, joined to the path by the strict axis, exactly as
-                // the target step of a `d` or an `e` is (Part 3, section 4.1).
-                TopLevelSplitter.Token stepToken = main.get(1);
-                ParsedPath stepPath = parsePath(stepToken, line,
-                    targetDepth(path, stepToken), parentTypeOf(path));
-                if (stepPath.steps.size() != 1) {
-                    throw error(SyntaxErrorCode.TARGET_MUST_BE_A_SINGLE_STEP,
-                        "the component a property command writes on is one step",
-                        range(line, stepToken), operationCounter + 1);
-                }
-                target = target.prepend(stepPath.steps.get(0), Axis.STRICT);
-            }
             if (multiplicity != null) {
                 Chain parent = target.parentChain();
                 Step head = withMultiplicity(target.head(), multiplicity);

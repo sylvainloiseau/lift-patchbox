@@ -543,7 +543,7 @@
   { "id": "C-078", "section": "Part 3, 4.2.1", "syntax": "LiftPatchShort",
     "description": "a concise type key selects a typed component",
     "dictionary": "standard",
-    "script": "c /memi n(y=\"general\", t@en = \"recorded at Yakoro\")\nu /memi n^general (t@en = \"recorded at Yakoro, 2025\")",
+    "script": "c /memi n(y=\"general\", t@en = \"recorded at Yakoro\")\nu /memi!n^general (t@en = \"recorded at Yakoro, 2025\")",
     "expect": { "status": "ok", "effects": [
       { "kind": "componentCreated", "componentType": "note", "position": null },
       { "kind": "propertySet", "property": "type", "language": null, "oldValue": null, "newValue": "general" },

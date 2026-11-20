@@ -3788,10 +3788,17 @@ On an **indented** line the path of a property command may be omitted, and the
 command then applies to the component of the enclosing indented block (section
 "3.3"): `s (d@en = "A pig")`. It may also be **relative**, its first step a child
 of that component: `s c (v = "Noun")` writes on the category of the block's
-sense, and `s x#1 (t = "a mami jefi")` on its first example. Outside an indented block the path is mandatory, and a
-property command written without one — like a component command other than an
-`entry` written without a parent — is rejected with `MISSING_PARENT_CLAUSE`, a
-static error.
+sense, and `s x#1 (t = "a mami jefi")` on its first example. Outside an indented
+block the path is mandatory, and a property command written without one — like a
+component command other than an `entry` written without a parent — is rejected
+with `MISSING_PARENT_CLAUSE`, a static error.
+
+The path of a property command is **one** token, and the component the command
+writes on is its last step: unlike the target of a `d` or an `e` (section
+"4.1"), that component is not written apart from the path. To join it by the
+strict axis, write `!`: `u /memi!n^general (t@en = "…")`. A step written between
+the path and the parenthesized list, as in `u /memi n^general (…)`, is a
+`SYNTAX_ERROR`.
 
 A list of properties in one command is the concise spelling of the assignment
 list of Part 2, section "9.1.1", and has exactly its semantics: the path is
@@ -5249,7 +5256,7 @@ in particular:
 
 - in both syntaxes: a blank name in a declaration directive (section "2.1.4"); an `ensure` with an initializer list instead of a selector; an `at` clause on `ensure` or on a command creating an `entry`; an `at before` / `at after` step whose component type is not the type being placed (section "6.2.1"); a step combining an ordinal or a type key with a predicate list; an ordinal or a type key written on a constructor, as in `create note^general(...)`; an unterminated string, a raw line break inside a string, or a backslash followed by anything other than `"` or `\` in a double-quoted string (section "1.2");
 - in LiftPatchRef: `move entry[...]`; a `move` without an `at` clause;
-- in LiftPatchShort: a command spread over several physical lines; `m /mami`, which would move an entry; a tab character in the indentation of a command line, and an indentation that matches no open block level (Part 3, section "3.3").
+- in LiftPatchShort: a command spread over several physical lines; a property command with a step written between its path and its parenthesized list, as in `u /memi n^general (…)` (Part 3, section "3.2"); `m /mami`, which would move an entry; a tab character in the indentation of a command line, and an indentation that matches no open block level (Part 3, section "3.3").
 
 ### B.2 Dynamic errors
 
@@ -6203,7 +6210,7 @@ implementation MAY add cases; it MUST pass these.
   { "id": "C-078", "section": "Part 3, 4.2.1", "syntax": "LiftPatchShort",
     "description": "a concise type key selects a typed component",
     "dictionary": "standard",
-    "script": "c /memi n(y=\"general\", t@en = \"recorded at Yakoro\")\nu /memi n^general (t@en = \"recorded at Yakoro, 2025\")",
+    "script": "c /memi n(y=\"general\", t@en = \"recorded at Yakoro\")\nu /memi!n^general (t@en = \"recorded at Yakoro, 2025\")",
     "expect": { "status": "ok", "effects": [
       { "kind": "componentCreated", "componentType": "note", "position": null },
       { "kind": "propertySet", "property": "type", "language": null, "oldValue": null, "newValue": "general" },
