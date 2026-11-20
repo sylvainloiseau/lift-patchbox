@@ -30,6 +30,13 @@ class PropertyCommandsTest extends PatchTestSupport {
     class Set {
 
         @Test
+        @DisplayName("refuses a qualifier on a property given a multi-language literal")
+        void refusesAQualifierOnAMultitextLiteral() {
+            refused(ModelErrorCode.QUALIFIER_ON_MULTITEXT_LITERAL,
+                "set form@tww = { tww: \"mamio\" } on entry[id = \"e-1\"]");
+        }
+
+        @Test
         @DisplayName("creates the value when the property is unset")
         void createsTheValue() {
             assertEffects(
@@ -207,6 +214,13 @@ class PropertyCommandsTest extends PatchTestSupport {
     @Nested
     @DisplayName("clear")
     class Clear {
+
+        @Test
+        @DisplayName("refuses a required scalar property, which may never become unset")
+        void refusesARequiredScalarProperty() {
+            refused(ModelErrorCode.CANNOT_CLEAR_REQUIRED_PROPERTY,
+                "clear value on trait^CVpattern of entry[form@tww = \"memi\"]");
+        }
 
         @Test
         @DisplayName("refuses every language of an optional multitext that has none")

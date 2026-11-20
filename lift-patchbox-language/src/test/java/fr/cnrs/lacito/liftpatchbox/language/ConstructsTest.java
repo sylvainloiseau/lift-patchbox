@@ -15,6 +15,7 @@ import fr.cnrs.lacito.liftapi.model.LiftHeader;
 import fr.cnrs.lacito.liftapi.model.LiftTrait;
 import fr.cnrs.lacito.liftpatchbox.engine.Plan;
 import fr.cnrs.lacito.liftpatchbox.error.ModelErrorCode;
+import fr.cnrs.lacito.liftpatchbox.language.error.SyntaxErrorCode;
 import java.nio.file.Files;
 import java.nio.file.Path;
 import java.util.List;
@@ -661,6 +662,15 @@ class ConstructsTest extends PatchTestSupport {
     @Nested
     @DisplayName("plan mode")
     class PlanMode {
+
+        @Test
+        @DisplayName("a script requiring a metamodel that is not loaded is refused")
+        void refusesAnUnloadedMetamodel() {
+            refused(SyntaxErrorCode.UNSUPPORTED_METAMODEL, """
+                %liftpatch 1.1 metamodel="tww-project-2"
+                create entry(form@tww = "mimi")
+                """);
+        }
 
         @Test
         @DisplayName("reports the effects and changes nothing")

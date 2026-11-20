@@ -5664,6 +5664,15 @@ are normative:
 - a **singleton** child is written as an object rather than as a list, because there is exactly one: `"category": { "value": "Noun" }`. A sense for which the fixture states no `category` still **has** one — `s-3`, `s-4` and `s-5` each have a category whose `value` is unset — since a singleton always exists on its host. Writing `"category": {}` and omitting the key are therefore the same fixture;
 - a **typed** child list is keyed by `type`, and no two entries of one such list may share a `type`; the order in which a fixture happens to write them is not significant and an implementation MUST NOT depend on it.
 
+A case whose initial state is not the standard fixture gives an **inline
+dictionary** in its `dictionary` field: an object of the same shape, without the
+`fixture` key. One key is available to an inline dictionary only:
+`externalFeatureSets`, an object mapping the id of a feature set defined in an
+external ranges file (Part 1, section "2.1.4") to the list of its features, as in
+`"externalFeatureSets": { "dialects": ["north", "south"] }`. Such a set is
+read-only, exactly as if the dictionary had been read from a LIFT file whose header
+refers to that ranges file. Cases `C-138` and `C-141` use an inline dictionary.
+
 ### D.3 The core cases
 
 The cases below are normative and minimal: they cover the rules that this
@@ -6430,7 +6439,199 @@ implementation MAY add cases; it MUST pass these.
     "description": "a relative singleton step is checked against the block's component like any other step",
     "dictionary": "standard",
     "script": "e /memi\n  s c (v = \"Noun\")",
-    "expect": { "status": "error", "code": "ILLEGAL_PARENT", "kind": "static", "commandIndex": 2 } }
+    "expect": { "status": "error", "code": "ILLEGAL_PARENT", "kind": "static", "commandIndex": 2 } },
+
+  { "id": "C-110", "section": "1.1", "syntax": "LiftPatchRef",
+    "description": "a pragma declaring a version the implementation does not support rejects the script",
+    "dictionary": "standard",
+    "script": "%liftpatch 9.0\ncreate entry(form@tww = \"mimi\")",
+    "expect": { "status": "error", "code": "UNSUPPORTED_LANGUAGE_VERSION", "kind": "static", "commandIndex": 0 } },
+
+  { "id": "C-111", "section": "1.1", "syntax": "LiftPatchRef",
+    "description": "a pragma attribute other than sigil, metamodel and syntax rejects the script",
+    "dictionary": "standard",
+    "script": "%liftpatch 1.1 colour=\"red\"\ncreate entry(form@tww = \"mimi\")",
+    "expect": { "status": "error", "code": "UNKNOWN_PRAGMA_ATTRIBUTE", "kind": "static", "commandIndex": 0 } },
+
+  { "id": "C-112", "section": "Appendix A", "syntax": "LiftPatchRef",
+    "description": "a script requiring a metamodel that is not loaded is rejected",
+    "dictionary": "standard",
+    "script": "%liftpatch 1.1 metamodel=\"tww-project-2\"\ncreate entry(form@tww = \"mimi\")",
+    "expect": { "status": "error", "code": "UNSUPPORTED_METAMODEL", "kind": "static", "commandIndex": 0 } },
+
+  { "id": "C-113", "section": "4.4", "syntax": "LiftPatchRef",
+    "description": "a language qualifier on a scalar property is refused",
+    "dictionary": "standard",
+    "script": "set value@en = \"Verb\" on category of sense[gloss@en = \"pig\"] of entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "LANG_KEY_NOT_SUPPORTED_ON_SCALAR", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-114", "section": "9.1", "syntax": "LiftPatchRef",
+    "description": "the wildcard qualifier never assigns",
+    "dictionary": "standard",
+    "script": "set definition@* = \"A dog\" on sense[gloss@en = \"dog\"] of entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "WILDCARD_NOT_ALLOWED", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-115", "section": "6.1", "syntax": "LiftPatchRef",
+    "description": "a property initialized twice in one command is refused",
+    "dictionary": "standard",
+    "script": "create entry(form@tww = \"mimi\", form@tww = \"mumu\")",
+    "expect": { "status": "error", "code": "DUPLICATE_PROPERTY", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-116", "section": "5.5.1", "syntax": "LiftPatchRef",
+    "description": "a multi-language literal carries its own languages and takes no qualifier",
+    "dictionary": "standard",
+    "script": "create entry(form@tww = { tww: \"mimi\" })",
+    "expect": { "status": "error", "code": "QUALIFIER_ON_MULTITEXT_LITERAL", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-117", "section": "Part 3, 6.2.4", "syntax": "LiftPatchShort",
+    "description": "a relation takes no unnamed initializer argument",
+    "dictionary": "standard",
+    "script": "c /memi r(\"synonym\")",
+    "expect": { "status": "error", "code": "UNNAMED_ARGUMENT_NOT_ALLOWED", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-118", "section": "5.2", "syntax": "LiftPatchRef",
+    "description": "a unique selector gives one qualified value of an identity multitext, not two",
+    "dictionary": "standard",
+    "script": "delete sense[gloss@en = \"pig\", gloss@fr = \"cochon\"] under entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "DUPLICATE_SELECTOR", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-119", "section": "5.1.3", "syntax": "LiftPatchRef",
+    "description": "a unique selector on a relation must give its whole natural identity",
+    "dictionary": "standard",
+    "script": "delete relation[type = \"synonym\"] under entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "INCOMPLETE_SELECTOR", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-120", "section": "8.2", "syntax": "LiftPatchRef",
+    "description": "an upsert must give the whole natural identity of its component type",
+    "dictionary": "standard",
+    "script": "upsert relation(type = \"synonym\") under entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "MISSING_IDENTITY_PROPERTY", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-121", "section": "5.1.2", "syntax": "LiftPatchRef",
+    "description": "a filtering-only operator is refused in a unique selector",
+    "dictionary": "standard",
+    "script": "delete sense[gloss@en ~ \"do\"] under entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "PREDICATE_NOT_ALLOWED_IN_UNIQUE_SELECTOR", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-122", "section": "5.1.4", "syntax": "LiftPatchRef",
+    "description": "an id is refused in a filtering selector",
+    "dictionary": "standard",
+    "script": "delete example#1 under sense[gloss@en = \"pig\"] within entry[id = \"e-1\"]",
+    "expect": { "status": "error", "code": "PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-123", "section": "5.3.2.1", "syntax": "LiftPatchRef",
+    "description": "an upsert cannot give a homophone number to an entry that may not exist yet",
+    "dictionary": "standard",
+    "script": "upsert entry(form@tww = \"mami\", hn = 1, has-gloss@en = \"pig\")",
+    "expect": { "status": "error", "code": "COMMAND_NOT_ALLOWING_HN", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-124", "section": "5.3.2.2", "syntax": "LiftPatchRef",
+    "description": "has-gloss narrows a form lookup and is never written alone",
+    "dictionary": "standard",
+    "script": "delete entry[has-gloss@en = \"dog\"]",
+    "expect": { "status": "error", "code": "HAS_GLOSS_CANNOT_BE_USED_ALONE", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-125", "section": "5.3.2.1", "syntax": "LiftPatchRef",
+    "description": "a homophone number is at least 1",
+    "dictionary": "standard",
+    "script": "delete entry[form@tww = \"mami\", hn = 0]",
+    "expect": { "status": "error", "code": "ILLEGAL_HN", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-126", "section": "5.3.3", "syntax": "LiftPatchRef",
+    "description": "an ordinal is at least 1",
+    "dictionary": "standard",
+    "script": "delete example#0 under sense[gloss@en = \"pig\"] of entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "ILLEGAL_ORDINAL", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-127", "section": "8.2", "syntax": "LiftPatchRef",
+    "description": "an upsert cannot give an id",
+    "dictionary": "standard",
+    "script": "upsert sense(gloss@en = \"dog\", id = \"s-9\") under entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "ID_NOT_ALLOWED_ON_UPSERT", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-128", "section": "5.6", "syntax": "LiftPatchShort",
+    "description": "an ensure asserts exactly one component and takes no multiplicity marker",
+    "dictionary": "standard",
+    "script": "e* /memi s[g=\"dog\"]",
+    "expect": { "status": "error", "code": "MULTIPLICITY_NOT_ALLOWED", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-129", "section": "6.3", "syntax": "LiftPatchRef",
+    "description": "a label visible in the current scope cannot be bound again",
+    "dictionary": "standard",
+    "script": "ensure entry[form@tww = \"memi\"] as $x\nensure sense[gloss@en = \"dog\"] under entry[form@tww = \"memi\"] as $x",
+    "expect": { "status": "error", "code": "DUPLICATE_LABEL", "kind": "static", "commandIndex": 2 } },
+
+  { "id": "C-130", "section": "6.3", "syntax": "LiftPatchRef",
+    "description": "a label no visible command has bound is refused",
+    "dictionary": "standard",
+    "script": "set definition@en = \"A dog\" on $dog",
+    "expect": { "status": "error", "code": "UNKNOWN_LABEL", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-131", "section": "Part 3, 3.3", "syntax": "LiftPatchShort",
+    "description": "a delete cannot anchor an indented block",
+    "dictionary": "standard",
+    "script": "d /memi\n  c s(\"puppy\")",
+    "expect": { "status": "error", "code": "DELETE_CANNOT_BE_AN_ANCHOR", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-132", "section": "11", "syntax": "LiftPatchShort",
+    "description": "an ensure cannot assert a child of a component the same block has just created",
+    "dictionary": "standard",
+    "script": "c e(\"mimi\")\n  e s[g=\"lizard\"]",
+    "expect": { "status": "error", "code": "CANNOT_UPSERT_ENSURE_OR_UPDATE_IN_CREATION_BLOCK", "kind": "static", "commandIndex": 2 } },
+
+  { "id": "C-133", "section": "9.3.1", "syntax": "LiftPatchRef",
+    "description": "a scalar identity property cannot be cleared",
+    "dictionary": "standard",
+    "script": "clear type on relation#1 of entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "CANNOT_CLEAR_IDENTITY_PROPERTY", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-134", "section": "9.3.1", "syntax": "LiftPatchRef",
+    "description": "a required scalar property cannot be cleared",
+    "dictionary": "standard",
+    "script": "clear value on trait^CVpattern of entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "CANNOT_CLEAR_REQUIRED_PROPERTY", "kind": "static", "commandIndex": 1 } },
+
+  { "id": "C-135", "section": "5.3.3", "syntax": "LiftPatchRef",
+    "description": "an ordinal greater than the number of siblings is out of bounds",
+    "dictionary": "standard",
+    "script": "delete example#3 under sense[gloss@en = \"pig\"] of entry[form@tww = \"mami\", hn = 1]",
+    "expect": { "status": "error", "code": "INDEX_OUT_OF_BOUNDS", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-136", "section": "9.3.1", "syntax": "LiftPatchRef",
+    "description": "clearing every language of a multitext that has no value at all is refused",
+    "dictionary": "standard",
+    "script": "clear definition@* on sense[gloss@en = \"dog\"] of entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "UNSET_PROPERTY", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-137", "section": "2.1.3", "syntax": "LiftPatchRef",
+    "description": "a language the dictionary already has cannot be created",
+    "dictionary": "standard",
+    "script": "language-create object = \"tpi\"",
+    "expect": { "status": "error", "code": "LANGUAGE_ALREADY_EXISTS", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-138", "section": "2.1.3", "syntax": "LiftPatchRef",
+    "description": "the only language of its kind cannot be deleted",
+    "dictionary": {"objectLanguages": ["tww"], "metaLanguages": ["en"], "entries": []},
+    "script": "language-delete meta = \"en\"",
+    "expect": { "status": "error", "code": "CANNOT_DELETE_LAST_LANGUAGE", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-139", "section": "4.2", "syntax": "LiftPatchRef",
+    "description": "a meta language the dictionary does not have is refused",
+    "dictionary": "standard",
+    "script": "set definition@de = \"Ein Hund\" on sense[gloss@en = \"dog\"] of entry[form@tww = \"memi\"]",
+    "expect": { "status": "error", "code": "NO_SUCH_META_LANGUAGE", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-140", "section": "2.1.4", "syntax": "LiftPatchRef",
+    "description": "a feature set the dictionary does not declare cannot be deleted",
+    "dictionary": "standard",
+    "script": "feature-set-delete \"dialects\"",
+    "expect": { "status": "error", "code": "NO_SUCH_DECLARATION", "kind": "dynamic", "commandIndex": 1 } },
+
+  { "id": "C-141", "section": "2.1.4", "syntax": "LiftPatchRef",
+    "description": "a feature set defined in an external ranges file cannot be renamed",
+    "dictionary": {"objectLanguages": ["tww"], "metaLanguages": ["en"], "externalFeatureSets": {"dialects": ["north", "south"]}, "entries": []},
+    "script": "feature-set-rename \"dialects\" to \"regions\"",
+    "expect": { "status": "error", "code": "DECLARATION_IS_EXTERNAL", "kind": "dynamic", "commandIndex": 1 } }
 ]
 ```
 

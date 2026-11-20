@@ -30,6 +30,33 @@ class SelectionTest extends PatchTestSupport {
     class Strategies {
 
         @Test
+        @DisplayName("has-gloss narrows a form lookup and is refused alone")
+        void refusesHasGlossAlone() {
+            refused(ModelErrorCode.HAS_GLOSS_CANNOT_BE_USED_ALONE,
+                "delete entry[has-gloss@en = \"dog\"]");
+        }
+
+        @Test
+        @DisplayName("a homophone number lower than 1 is refused")
+        void refusesAHomophoneNumberBelowOne() {
+            refused(ModelErrorCode.ILLEGAL_HN, "delete entry[form@tww = \"mami\", hn = 0]");
+        }
+
+        @Test
+        @DisplayName("an ordinal lower than 1 is refused before any lookup")
+        void refusesAnOrdinalBelowOne() {
+            refused(ModelErrorCode.ILLEGAL_ORDINAL,
+                "delete example#0 under sense[gloss@en = \"pig\"] of entry[form@tww = \"mami\", hn = 1]");
+        }
+
+        @Test
+        @DisplayName("an ordinal greater than the number of siblings is out of bounds")
+        void refusesAnOrdinalBeyondTheSiblings() {
+            refused(ModelErrorCode.INDEX_OUT_OF_BOUNDS,
+                "delete example#3 under sense[gloss@en = \"pig\"] of entry[form@tww = \"mami\", hn = 1]");
+        }
+
+        @Test
         @DisplayName("S2: a persistent identifier selects on its own")
         void selectsByIdentifier() {
             assertEffects(apply("set form = { tww: \"mamio\" } on entry[id = \"e-1\"]"),

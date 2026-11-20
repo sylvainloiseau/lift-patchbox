@@ -7,6 +7,8 @@ import java.io.IOException;
 import java.io.InputStream;
 import java.io.UncheckedIOException;
 import java.nio.charset.StandardCharsets;
+import java.nio.file.Files;
+import java.nio.file.Path;
 import java.util.List;
 import java.util.Map;
 
@@ -23,6 +25,13 @@ import java.util.Map;
  * child is written as an object rather than as a list, and a sense for which the
  * fixture states no {@code category} still has one, whose {@code value} is
  * unset.</p>
+ *
+ * <p>A corpus case may also give an inline dictionary of the same shape (Appendix
+ * D.1), which {@link #build(Map)} builds. Such a document may declare
+ * {@code externalFeatureSets}: feature sets defined in an external ranges file.
+ * Since a feature set is external only when the dictionary was read from a file
+ * referring to one, such a dictionary is written to a temporary directory, with
+ * its ranges files, and read back.</p>
  */
 public final class StandardFixture {
 
@@ -38,16 +47,77 @@ public final class StandardFixture {
      * @return a new dictionary, independent of every other one this method returned
      */
     public static LiftDictionary build() {
-        Map<String, Object> doc = Json.parseObject(read());
-        LiftDictionary dictionary = LiftDictionary.makeBuilder()
-            .withObjectLanguages(Json.strings(doc, "objectLanguages").toArray(String[]::new))
-            .withMetaLanguages(Json.strings(doc, "metaLanguages").toArray(String[]::new))
-            .build();
+        return build(Json.parseObject(read()));
+    }
+
+    /**
+     * Build a fresh dictionary from a document of the fixture's shape: the standard
+     * fixture, or the inline dictionary of a corpus case (Appendix D.1).
+     *
+     * @param doc the document
+     * @return a new dictionary
+     */
+    public static LiftDictionary build(Map<String, Object> doc) {
+        List<String> objectLanguages = Json.strings(doc, "objectLanguages");
+        List<String> metaLanguages = Json.strings(doc, "metaLanguages");
+        Map<String, Object> external = Json.object(doc, "externalFeatureSets");
+        LiftDictionary dictionary;
+        if (external.isEmpty()) {
+            dictionary = LiftDictionary.makeBuilder()
+                .withObjectLanguages(objectLanguages.toArray(String[]::new))
+                .withMetaLanguages(metaLanguages.toArray(String[]::new))
+                .build();
+        } else {
+            dictionary = readWithExternalSets(external);
+            for (String code : objectLanguages) {
+                if (!dictionary.getObjectLanguageManager().getLanguages().contains(code)) {
+                    dictionary.getObjectLanguageManager().addLanguage(code);
+                }
+            }
+            for (String code : metaLanguages) {
+                if (!dictionary.getMetaLanguageManager().getLanguages().contains(code)) {
+                    dictionary.getMetaLanguageManager().addLanguage(code);
+                }
+            }
+        }
 
         for (Object raw : Json.array(doc, "entries")) {
             addEntry(dictionary, cast(raw));
         }
         return dictionary;
+    }
+
+    /**
+     * A dictionary with no entry, whose header refers to one external ranges file per
+     * feature set, read from a temporary directory.
+     */
+    private static LiftDictionary readWithExternalSets(Map<String, Object> external) {
+        try {
+            Path dir = Files.createTempDirectory("liftpatch-fixture");
+            StringBuilder ranges = new StringBuilder();
+            for (Map.Entry<String, Object> set : external.entrySet()) {
+                String id = set.getKey();
+                String file = id + ".lift-ranges";
+                StringBuilder elements = new StringBuilder();
+                for (Object feature : (List<?>) set.getValue()) {
+                    elements.append("<range-element id=\"").append(feature).append("\"/>\n");
+                }
+                Files.writeString(dir.resolve(file),
+                    "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<lift-ranges>\n<range id=\""
+                        + id + "\">\n" + elements + "</range>\n</lift-ranges>\n");
+                ranges.append("<range id=\"").append(id).append("\" href=\"").append(file)
+                    .append("\"/>\n");
+            }
+            Path lift = dir.resolve("fixture.lift");
+            Files.writeString(lift,
+                "<?xml version=\"1.0\" encoding=\"UTF-8\"?>\n<lift version=\"0.13\" producer=\"fixture\">\n"
+                    + "<header><ranges>\n" + ranges + "</ranges></header>\n</lift>\n");
+            return LiftDictionary.loadDictionaryFromFile(lift.toFile());
+        } catch (IOException e) {
+            throw new UncheckedIOException("Cannot write the fixture to a temporary directory", e);
+        } catch (Exception e) {
+            throw new IllegalStateException("Cannot read the fixture back", e);
+        }
     }
 
     @SuppressWarnings("unchecked")

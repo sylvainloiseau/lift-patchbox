@@ -287,6 +287,13 @@ class ComponentCommandsTest extends PatchTestSupport {
     class Upsert {
 
         @Test
+        @DisplayName("refuses a homophone number, which a component that may not exist cannot have")
+        void refusesAHomophoneNumber() {
+            refused(ModelErrorCode.COMMAND_NOT_ALLOWING_HN,
+                "upsert entry(form@tww = \"mami\", hn = 1, has-gloss@en = \"pig\")");
+        }
+
+        @Test
         @DisplayName("select branch: the component exists, only the assignments apply")
         void selectBranchAppliesOnlyTheAssignments() {
             assertEffects(

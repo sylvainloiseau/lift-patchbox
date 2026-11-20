@@ -33,7 +33,7 @@ import org.junit.jupiter.api.TestFactory;
  * claims conformance to LiftPatch 1.1 by passing every one of them.</p>
  *
  * <p>The comparison is exactly the one Appendix D.1 defines: for an {@code ok}
- * case, the concatenated effects restricted to the ten comparable fields, plus
+ * case, the concatenated effects restricted to the fourteen comparable fields, plus
  * the warnings and the dangling references when the case states them; for an
  * {@code error} case, the code, its kind and the operation it was raised on, and
  * the dictionary unchanged afterwards. Messages and paths are never compared.</p>
@@ -67,7 +67,7 @@ class ConformanceCorpusTest {
             : Syntax.REFERENCE;
         Map<String, Object> expect = Json.object(testCase, "expect");
 
-        LiftDictionary dictionary = StandardFixture.build();
+        LiftDictionary dictionary = dictionaryOf(testCase);
         LiftPatchBox box = new LiftPatchBox()
             .withDefaultObjectLanguage("tww")
             .withDefaultMetaLanguage("en");
@@ -77,6 +77,23 @@ class ConformanceCorpusTest {
             return;
         }
         runOkCase(id, box, dictionary, script, syntax, expect);
+    }
+
+    /**
+     * The initial state of a case: the named fixture, or an inline dictionary of the
+     * same shape (Appendix D.1).
+     */
+    private static LiftDictionary dictionaryOf(Map<String, Object> testCase) {
+        Object dictionary = testCase.get("dictionary");
+        if (dictionary instanceof Map<?, ?> inline) {
+            @SuppressWarnings("unchecked")
+            Map<String, Object> doc = (Map<String, Object>) inline;
+            return StandardFixture.build(doc);
+        }
+        if (!"standard".equals(dictionary)) {
+            fail(Json.string(testCase, "id") + ": unknown fixture " + dictionary);
+        }
+        return StandardFixture.build();
     }
 
     private void runErrorCase(
@@ -103,9 +120,8 @@ class ConformanceCorpusTest {
 
         assertEquals(expected, actual.code().id(), id + ": wrong error code (" + actual.message() + ")");
         assertEquals(expectedKind, actual.kind(), id + ": wrong error kind");
-        if (expectedIndex > 0) {
-            assertEquals(expectedIndex, actual.operationIndex(), id + ": wrong operation index");
-        }
+        // 0 is the index of an error carried by the script as a whole (Appendix D.1).
+        assertEquals(expectedIndex, actual.operationIndex(), id + ": wrong operation index");
         // The dictionary must be unchanged: a failed script leaves it exactly as it was.
         assertEquals(entriesBefore, dictionary.getLiftDictionaryRegistry().getEntries().size(),
             id + ": the dictionary was left changed by a failing script");
