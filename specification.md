@@ -5271,8 +5271,8 @@ in particular:
 | `NOT_FOUND` | a selector, a path, a value chain or an `ensure` assertion matches no component | 5.1, 8.3 |
 | `AMBIGUOUS_REFERENCE` | a selector required to select exactly one component matches several | 5.1, 7.3 |
 | `CANNOT_CREATE_DUPLICATE` | a `create`, `upsert`, `set`, `update` or `move` would give two same-type siblings the same values for the natural identity property set | 5.2, 8.1, 8.5 |
-| `UNSET_PROPERTY` | `update` or `clear` targets a property that has no value at all | 9.2, 9.3.1 |
-| `UNSET_QUALIFIED_PROPERTY` | `update` or `clear` targets a qualified value `p@L` that is not set, even though another language of `p` is | 9.2, 9.3.1 |
+| `UNSET_PROPERTY` | `update` or `clear` targets a scalar property that is unset, or `clear p@*` a multitext that has no value in any language | 9.2, 9.3.1 |
+| `UNSET_QUALIFIED_PROPERTY` | `update` or `clear` targets a qualified value `p@L` that is not set, whether or not other languages of `p` are | 9.2, 9.3.1 |
 | `CANNOT_CLEAR_REQUIRED_MULTITEXT` | `clear` would leave a required or identity multitext with no value at all | 9.3.1 |
 | `INDEX_OUT_OF_BOUNDS` | an ordinal or an `at index n` is greater than the upper bound of the same-type sibling list. A value lower than 1 is the static `ILLEGAL_ORDINAL` instead | 5.3.3, 6.2, 8.5 |
 | `MOVING_TO_CURRENT_POSITION` | a `move` resolves to the position the component already occupies | 8.5 |

@@ -209,6 +209,20 @@ class PropertyCommandsTest extends PatchTestSupport {
     class Clear {
 
         @Test
+        @DisplayName("refuses every language of an optional multitext that has none")
+        void refusesTheWildcardOnAnEmptyMultitext() {
+            refused(ModelErrorCode.UNSET_PROPERTY,
+                "clear definition@* on sense[gloss@en = \"dog\"] of entry[form@tww = \"memi\"]");
+        }
+
+        @Test
+        @DisplayName("refuses one language of an optional multitext that has none")
+        void refusesOneLanguageOfAnEmptyMultitext() {
+            refused(ModelErrorCode.UNSET_QUALIFIED_PROPERTY,
+                "clear definition@en on sense[gloss@en = \"dog\"] of entry[form@tww = \"memi\"]");
+        }
+
+        @Test
         @DisplayName("removes one qualified value when another remains")
         void removesOneQualifiedValue() {
             assertEffects(

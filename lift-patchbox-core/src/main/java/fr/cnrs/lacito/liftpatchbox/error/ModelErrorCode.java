@@ -113,9 +113,15 @@ public enum ModelErrorCode implements ErrorCode {
     AMBIGUOUS_REFERENCE(ErrorKind.DYNAMIC),
     /** A command would give two same-type siblings the same natural identity key. */
     CANNOT_CREATE_DUPLICATE(ErrorKind.DYNAMIC),
-    /** {@code update} or {@code clear} targets a property that has no value at all. */
+    /**
+     * {@code update} or {@code clear} targets a scalar property that is unset, or
+     * {@code clear p@*} a multitext that has no value in any language.
+     */
     UNSET_PROPERTY(ErrorKind.DYNAMIC),
-    /** {@code update} or {@code clear} targets a qualified value that is not set. */
+    /**
+     * {@code update} or {@code clear} targets a qualified value that is not set, whether
+     * or not other languages of the property are.
+     */
     UNSET_QUALIFIED_PROPERTY(ErrorKind.DYNAMIC),
     /** {@code clear} would leave a required or identity multitext with no value at all. */
     CANNOT_CLEAR_REQUIRED_MULTITEXT(ErrorKind.DYNAMIC),
