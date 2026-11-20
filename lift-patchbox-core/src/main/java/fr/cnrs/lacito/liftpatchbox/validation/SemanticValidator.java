@@ -784,8 +784,13 @@ public final class SemanticValidator {
             // A step is a unique selector when the link to its child is the strict
             // axis; the head's child link is the unwritten strict one that joins a
             // parent path to its direct target.
+            // A label above its child is never a filtering selector: it denotes
+            // exactly one component, so an existential join below it reduces to the
+            // strict one, and `$pig/x[...]` means what `$pig!x[...]` means (Part 1,
+            // section 6.3).
             SelectorKind kind = i == 0
                 ? headKind
+                : steps.get(i) instanceof Step.Label ? SelectorKind.UNIQUE
                 : (i == 1 && markedSingleton) ? SelectorKind.FILTERING
                 : (chain.axisAbove(i - 1) == Axis.STRICT
                     ? SelectorKind.UNIQUE : SelectorKind.FILTERING);

@@ -186,6 +186,40 @@ class ConciseSyntaxTest extends PatchTestSupport {
                 applyConcise("u /memi n^general (t@en = \"recorded at Yakoro, 2025\")"),
                 "replaced:text@en:recorded at Yakoro->recorded at Yakoro, 2025");
         }
+
+        @Test
+        @DisplayName("an existential join below a label is the strict one")
+        void anExistentialJoinBelowALabelIsStrict() {
+            assertEffects(
+                applyConcise("""
+                    e /e[f="mami", hn=1] s[g="pig"] as $pig
+
+                    s $pig/x#1 (t@tww = "a mami jefu")
+                    s $pig/c (v = "Verb")
+                    """),
+                "replaced:text@tww:a mami jefi->a mami jefu",
+                "replaced:value:Noun->Verb");
+        }
+
+        @Test
+        @DisplayName("an existential join below a label is the strict one in the reference syntax")
+        void anExistentialJoinBelowALabelIsStrictInTheReferenceSyntax() {
+            assertEffects(
+                apply("""
+                    ensure sense[gloss@en = "pig"] under entry[form@tww = "mami", hn = 1] as $pig
+                    set text@tww = "a mami jefu" on example#1 within $pig
+                    """),
+                "replaced:text@tww:a mami jefi->a mami jefu");
+        }
+
+        @Test
+        @DisplayName("a label is still refused as a filtering selector")
+        void aLabelIsRefusedAsAFilter() {
+            refused(ModelErrorCode.PSEUDO_PROPERTY_NOT_ALLOWED_IN_FILTER, """
+                ensure entry[form@tww = "memi"] as $memi
+                delete each sense[has $memi] under entry[form@tww = "mami", hn = 1]
+                """);
+        }
     }
 
     @Nested
